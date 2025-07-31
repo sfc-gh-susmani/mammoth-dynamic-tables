@@ -22,7 +22,7 @@ USE WAREHOUSE DEMO_WH;
 DROP DYNAMIC TABLE IF EXISTS silver_imagery_metadata_iceberg;
 
 CREATE OR REPLACE DYNAMIC ICEBERG TABLE silver_imagery_metadata_iceberg 
-TARGET_LAG = '5 minutes'
+TARGET_LAG = 'downstream'
 WAREHOUSE = DEMO_WH
 EXTERNAL_VOLUME = 'mammoth_iceberg_external_volume'
 CATALOG = 'SNOWFLAKE'
@@ -145,7 +145,7 @@ WHERE image_id IS NOT NULL;
 DROP DYNAMIC TABLE IF EXISTS silver_imagery_spatial_metrics_iceberg;
 
 CREATE OR REPLACE DYNAMIC ICEBERG TABLE silver_imagery_spatial_metrics_iceberg 
-TARGET_LAG = '10 minutes'
+TARGET_LAG = 'downstream'
 WAREHOUSE = DEMO_WH
 EXTERNAL_VOLUME = 'mammoth_iceberg_external_volume'
 CATALOG = 'SNOWFLAKE'
@@ -239,7 +239,7 @@ WHERE image_id IS NOT NULL;
 DROP DYNAMIC TABLE IF EXISTS gold_daily_summary_iceberg;
 
 CREATE OR REPLACE DYNAMIC ICEBERG TABLE gold_daily_summary_iceberg 
-TARGET_LAG = 'DOWNSTREAM'
+TARGET_LAG = '15 minutes'
 WAREHOUSE = DEMO_WH
 EXTERNAL_VOLUME = 'mammoth_iceberg_external_volume'
 CATALOG = 'SNOWFLAKE'
