@@ -1,11 +1,8 @@
 definition_version: 1.1
-project:
-  name: "nga_imagery_intelligence"
-  
+
 streamlit:
-  nga_imagery_intelligence_app:
-    title: "NGA Imagery Intelligence Platform"
-    query_warehouse: "DEMO_WH"
-    main_file: "nga_imagery_intelligence_app.py"
-    pages_dir: null
-    stage: "nga_app_stage" 
+  name: "nga_imagery_intelligence_app"
+  title: "NGA Imagery Intelligence Platform"
+  query_warehouse: "DEMO_WH"
+  main_file: "nga_imagery_intelligence_app.py"
+  stage: "nga_app_stage" 
