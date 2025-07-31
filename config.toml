@@ -1,0 +1,16 @@
+[connections.default]
+# Snowflake account configuration for DODICSE
+account = "SFSENORTHAMERICA-DODICSE"
+user = "sfacchine"
+# Password will be injected from GitHub Secrets
+database = "MAMMOTH"
+schema = "PUBLIC"
+warehouse = "DEMO_WH"
+role = "ACCOUNTADMIN"
+
+[streamlit]
+# Streamlit app configuration
+name = "nga_imagery_intelligence_app"
+file = "nga_imagery_intelligence_app.py"
+warehouse = "DEMO_WH"
+title = "NGA Imagery Intelligence Platform" 

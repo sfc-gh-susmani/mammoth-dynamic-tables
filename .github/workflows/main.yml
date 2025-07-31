@@ -1,0 +1,58 @@
+# Name the GitHub Action
+name: Deploy NGA Imagery Intelligence App via Snowflake CLI
+
+on:
+  push:
+    branches:
+    - main
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  PYTHON_VERSION: '3.9'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+    # Checks out your repository under $GITHUB_WORKSPACE, so your workflow can access it
+    - name: 'Checkout GitHub Action'
+      uses: actions/checkout@v3
+
+    - name: Install Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: 'Install Snowflake CLI'
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install snowflake-cli-labs
+
+    - name: 'Create config'
+      shell: bash
+      env:
+        SNOWFLAKE_PASSWORD: ${{ secrets.SNOWCLI_PW }}
+      run: |
+        mkdir -p ~/.snowflake
+        cp config.toml ~/.snowflake/config.toml
+        echo "password = \"$SNOWFLAKE_PASSWORD\"" >> ~/.snowflake/config.toml
+        chmod 0600 ~/.snowflake/config.toml
+
+    - name: 'Deploy the Streamlit app'
+      shell: bash
+      run: |
+        snow streamlit deploy --replace
+
+    - name: 'Get Streamlit app URL'
+      shell: bash
+      run: |
+        snow streamlit get-url nga_imagery_intelligence_app
+
+    - name: 'Deployment Success Notification'
+      shell: bash
+      run: |
+        echo "🎉 NGA Imagery Intelligence App deployed successfully!"
+        echo "✅ Streamlit app is now live in Snowflake"
+        echo "🔗 Access via Snowsight > Apps > Streamlit" 
