@@ -542,58 +542,129 @@ if page == "🏠 Operational Dashboard":
     st.plotly_chart(fig, use_container_width=True)
 
 elif page == "🛰️ Imagery Viewer":
-    st.subheader("🛰️ Satellite Imagery Intelligence Viewer")
+    st.subheader("🛰️ Satellite Imagery Viewer")
+    st.markdown("**View satellite image locations on the map and select an image below to view details**")
     
-    # Image Selection
-    col1, col2 = st.columns([2, 3])
+    # Direct query approach like your H3 example
+    query = """
+    SELECT
+        IMAGE_ID,
+        CAPTURE_TIMESTAMP,
+        CAPTURE_DATE,
+        LATITUDE,
+        LONGITUDE,
+        SENSOR_CATEGORY,
+        BAY_REGION,
+        RESOLUTION_CATEGORY,
+        COMBINED_QUALITY_SCORE,
+        RESOLUTION_METERS,
+        S3_KEY
+    FROM MAMMOTH.PUBLIC.SILVER_IMAGERY_METADATA_ICEBERG
+    WHERE LATITUDE IS NOT NULL 
+      AND LONGITUDE IS NOT NULL
+      AND LATITUDE BETWEEN -90 AND 90
+      AND LONGITUDE BETWEEN -180 AND 180
+    LIMIT 100;
+    """
     
-    with col1:
-        st.subheader("📋 Image Catalog")
+    df = session.sql(query).to_pandas()
+    
+    if not df.empty:
+        # Prepare data for pydeck (following your working pattern)
+        point_data = []
+        for _, row in df.iterrows():
+            point_data.append({
+                "position": [float(row["LONGITUDE"]), float(row["LATITUDE"])],
+                "IMAGE_ID": str(row["IMAGE_ID"]),
+                "CAPTURE_TIMESTAMP": str(row["CAPTURE_TIMESTAMP"]),
+                "CAPTURE_DATE": str(row["CAPTURE_DATE"]),
+                "LATITUDE": row["LATITUDE"],
+                "LONGITUDE": row["LONGITUDE"],
+                "SENSOR_CATEGORY": str(row["SENSOR_CATEGORY"]),
+                "BAY_REGION": str(row["BAY_REGION"]),
+                "RESOLUTION_CATEGORY": str(row["RESOLUTION_CATEGORY"]),
+                "COMBINED_QUALITY_SCORE": row["COMBINED_QUALITY_SCORE"],
+                "RESOLUTION_METERS": row["RESOLUTION_METERS"],
+                "S3_KEY": str(row["S3_KEY"])
+            })
         
-        # Display filtered images list
-        for idx, row in filtered_df.head(10).iterrows():
-            with st.container():
+        layer = pdk.Layer(
+            "ScatterplotLayer",
+            data=point_data,
+            get_position="position",
+            get_color=[0, 128, 255, 120],  # Using your blue color
+            get_radius=200,
+            radius_scale=1,
+            pickable=True,
+        )
+        
+        view_state = pdk.ViewState(latitude=37.77, longitude=-122.42, zoom=9)
+        
+        tooltip_html = """
+        <b>🛰️ Satellite Image</b><br>
+        <b>Sensor:</b> {SENSOR_CATEGORY}<br>
+        <b>Capture Date:</b> {CAPTURE_DATE}<br>
+        <b>Lat:</b> {LATITUDE}, <b>Lon:</b> {LONGITUDE}<br>
+        <b>Quality:</b> {COMBINED_QUALITY_SCORE}%<br>
+        <b>Bay Region:</b> {BAY_REGION}<br>
+        <b>Resolution:</b> {RESOLUTION_CATEGORY}
+        """
+        
+        # Display the map
+        st.pydeck_chart(pdk.Deck(
+            layers=[layer],
+            initial_view_state=view_state,
+            tooltip={"html": tooltip_html, "style": {"backgroundColor": "steelblue", "color": "white"}}
+        ))
+        
+        # Image selection below the map
+        st.markdown("---")
+        st.subheader("🖼️ Select Satellite Image")
+        
+        # Create a selectbox with image options
+        image_options = []
+        for idx, row in df.iterrows():
+            label = f"{row['SENSOR_CATEGORY']} - {row['CAPTURE_DATE']} - Quality: {row['COMBINED_QUALITY_SCORE']:.1f}% - {row['BAY_REGION']}"
+            image_options.append((label, idx))
+        
+        if image_options:
+            selected_label, selected_idx = st.selectbox(
+                "Select an image to view:",
+                image_options,
+                format_func=lambda x: x[0],
+                index=0
+            )
+            
+            selected_image = df.iloc[selected_idx]
+            
+            # Display selected image details and image
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
                 st.markdown(f"""
-                **Image ID:** {row['IMAGE_ID'][:20]}...  
-                **Sensor:** {row['SENSOR_CATEGORY']}  
-                **Quality:** {row['COMBINED_QUALITY_SCORE']:.1f}%  
-                **Location:** {row['BAY_REGION']} - {row['CLOSEST_LANDMARK']}  
-                **Resolution:** {row['RESOLUTION_METERS']:.1f}m  
-                **Date:** {row['CAPTURE_DATE']}
+                **📋 Image Intelligence:**
+                - **ID:** {selected_image['IMAGE_ID']}
+                - **Sensor:** {selected_image['SENSOR_CATEGORY']}
+                - **Quality Score:** {selected_image['COMBINED_QUALITY_SCORE']:.1f}%
+                - **Resolution:** {selected_image['RESOLUTION_METERS']}m
+                - **Capture Date:** {selected_image['CAPTURE_DATE']}
+                - **Location:** {selected_image['BAY_REGION']}
+                - **Coordinates:** {selected_image['LATITUDE']:.6f}, {selected_image['LONGITUDE']:.6f}
                 """)
-                
-                if st.button(f"View Image {idx}", key=f"view_{idx}"):
-                    st.session_state.selected_image = row
-                
-                st.divider()
-    
-    with col2:
-        st.subheader("🖼️ Image Display")
-        
-        if 'selected_image' in st.session_state:
-            selected = st.session_state.selected_image
             
-            # Image metadata
-            st.markdown(f"""
-            **Selected Image Intelligence:**
-            - **ID:** {selected['IMAGE_ID']}
-            - **Coordinates:** {selected['LATITUDE']:.6f}, {selected['LONGITUDE']:.6f}
-            - **H3 Cell:** {selected['H3_RES8_CITY']}
-            - **Urban Classification:** {spatial_df[spatial_df['IMAGE_ID'] == selected['IMAGE_ID']]['URBAN_CLASSIFICATION'].iloc[0] if len(spatial_df[spatial_df['IMAGE_ID'] == selected['IMAGE_ID']]) > 0 else 'N/A'}
-            - **Distance to SF:** {selected['DISTANCE_TO_SF_DOWNTOWN_M']:.0f}m
-            """)
-            
-            # Display the actual image
-            if pd.notna(selected['S3_KEY']):
-                st.info(f"Loading image from: {selected['S3_KEY']}")
-                display_image_from_s3(
-                    selected['S3_KEY'], 
-                    caption=f"Satellite Image - {selected['SENSOR_CATEGORY']} - {selected['CAPTURE_DATE']}"
-                )
-            else:
-                st.warning("No S3 key available for this image")
+            with col2:
+                # Display the actual satellite image
+                if pd.notna(selected_image['S3_KEY']):
+                    display_image_from_s3(
+                        selected_image['S3_KEY'], 
+                        caption=f"Satellite Image - {selected_image['SENSOR_CATEGORY']} - {selected_image['CAPTURE_DATE']}"
+                    )
+                else:
+                    st.warning("No satellite image available for this location")
         else:
-            st.info("Select an image from the catalog to view details and imagery")
+            st.warning("No images available for selection")
+    else:
+        st.error("No imagery data found in the database")
 
 elif page == "🗺️ Geospatial Analysis":
     st.subheader("🗺️ Geospatial Intelligence Analysis")
@@ -1276,43 +1347,118 @@ elif page == "🤖 AI Intelligence Assistant":
     
     # Cortex Analyst helper functions
     def call_cortex_analyst(question, conversation_id=None):
-        """Call Cortex Analyst using proper function format"""
+        """Call Cortex Analyst using the official Snowflake API approach"""
         try:
-            # Escape single quotes in the question to prevent SQL injection
-            escaped_question = question.replace("'", "''")
+            import _snowflake  # Snowflake-specific API for Streamlit in Snowflake
             
-            # Build the SQL query with proper function call
-            if conversation_id:
-                sql_query = f"""
-                    SELECT SNOWFLAKE.CORTEX.ANALYST(
-                        OBJECT_CONSTRUCT(
-                            'semantic_model', '@nga_app_stage/semantic_models/nga_intelligence_semantic_model.yaml',
-                            'question', '{escaped_question}',
-                            'conversation_id', '{conversation_id}'
-                        )
-                    ) as response
-                """
-            else:
-                sql_query = f"""
-                    SELECT SNOWFLAKE.CORTEX.ANALYST(
-                        OBJECT_CONSTRUCT(
-                            'semantic_model', '@nga_app_stage/semantic_models/nga_intelligence_semantic_model.yaml',
-                            'question', '{escaped_question}'
-                        )
-                    ) as response
-                """
+            # Build messages array for conversation
+            messages = []
             
-            # Execute the query
-            response = session.sql(sql_query).collect()
+            # Add conversation history if available (use API-specific history)
+            if 'api_conversation_history' in st.session_state:
+                messages.extend(st.session_state.api_conversation_history)
             
-            if response and len(response) > 0:
-                result = json.loads(response[0]['RESPONSE'])
-                return result
-            else:
-                return {"error": "No response from Cortex Analyst"}
+            # Add current user question
+            messages.append({
+                "role": "user",
+                "content": [{"type": "text", "text": question}]
+            })
+            
+            # Prepare the request body
+            request_body = {
+                "messages": messages,
+                "semantic_model_file": "@nga_app_stage/semantic_models/nga_intelligence_semantic_model.yaml"
+            }
+            
+            # API endpoint and timeout
+            API_ENDPOINT = "/api/v2/cortex/analyst/message"
+            API_TIMEOUT = 50000  # milliseconds
+            
+            # Send request to Cortex Analyst API
+            resp = _snowflake.send_snow_api_request(
+                "POST",         # method
+                API_ENDPOINT,   # path  
+                {},             # headers
+                {},             # params
+                request_body,   # body
+                None,           # request_guid
+                API_TIMEOUT     # timeout
+            )
+            
+            # Parse response
+            parsed_content = json.loads(resp["content"])
+            
+            # Check if response is successful
+            if resp["status"] < 400:
+                # Store conversation history for API (different from display history)
+                if 'api_conversation_history' not in st.session_state:
+                    st.session_state.api_conversation_history = []
                 
+                # Add user message to API history
+                st.session_state.api_conversation_history.append({
+                    "role": "user", 
+                    "content": [{"type": "text", "text": question}]
+                })
+                
+                # Add analyst response to API history
+                if "message" in parsed_content:
+                    st.session_state.api_conversation_history.append(parsed_content["message"])
+                
+                return parsed_content
+            else:
+                error_msg = f"API Error {resp['status']}: {parsed_content.get('message', 'Unknown error')}"
+                return {"error": error_msg}
+                
+        except ImportError:
+            return {"error": "This feature requires running in Snowflake Streamlit environment"}
         except Exception as e:
             return {"error": f"Error calling Cortex Analyst: {str(e)}"}
+    
+    def process_cortex_response(api_response):
+        """Process Cortex Analyst API response into the format expected by display code"""
+        try:
+            if "error" in api_response:
+                return api_response
+            
+            if "message" not in api_response:
+                return {"error": "Invalid response format from Cortex Analyst"}
+            
+            message_content = api_response["message"]["content"]
+            processed = {}
+            
+            # Extract text responses and SQL statements from content blocks
+            text_parts = []
+            sql_statement = None
+            suggestions = []
+            
+            for content_block in message_content:
+                if content_block["type"] == "text":
+                    text_parts.append(content_block["text"])
+                elif content_block["type"] == "sql":
+                    sql_statement = content_block["statement"]
+                elif content_block["type"] == "suggestions":
+                    suggestions.extend(content_block["suggestions"])
+            
+            # Combine text parts into answer
+            if text_parts:
+                processed["answer"] = "\n".join(text_parts)
+            
+            # Add SQL if available
+            if sql_statement:
+                processed["sql"] = sql_statement
+            
+            # Add suggestions if available
+            if suggestions:
+                processed["suggestions"] = suggestions
+            
+            # Include request_id for feedback if available
+            if "request_id" in api_response:
+                processed["request_id"] = api_response["request_id"]
+            
+            return processed
+            
+        except Exception as e:
+            return {"error": f"Error processing Cortex Analyst response: {str(e)}"}
     
     def execute_sql_query(sql_query):
         """Execute SQL query and return results"""
@@ -1324,231 +1470,243 @@ elif page == "🤖 AI Intelligence Assistant":
             return None
     
     def create_geospatial_visualization(query_result, question):
-        """Create geospatial visualization based on query results"""
-        if query_result is None or query_result.empty:
-            return None
+        """Create geospatial visualization based on query results using robust approach"""
+        try:
+            if query_result is None or query_result.empty:
+                return None
+                
+            # Check if we have location data (lat/lon coordinates)
+            lat_cols = [col for col in query_result.columns if 'lat' in col.lower()]
+            lon_cols = [col for col in query_result.columns if 'lon' in col.lower()]
             
-        # Check if we have location data (lat/lon or coordinates)
-        lat_cols = [col for col in query_result.columns if 'lat' in col.lower() or 'latitude' in col.lower()]
-        lon_cols = [col for col in query_result.columns if 'lon' in col.lower() or 'longitude' in col.lower()]
-        
-        if not lat_cols or not lon_cols:
-            return None
+            if not lat_cols or not lon_cols:
+                return None
+                
+            lat_col = lat_cols[0]
+            lon_col = lon_cols[0]
             
-        lat_col = lat_cols[0]
-        lon_col = lon_cols[0]
-        
-        # Filter out invalid coordinates
-        valid_data = query_result.dropna(subset=[lat_col, lon_col])
-        valid_data = valid_data[
-            (valid_data[lat_col].between(-90, 90)) & 
-            (valid_data[lon_col].between(-180, 180))
-        ]
-        
-        if valid_data.empty:
-            return None
+            # Filter valid coordinates
+            valid_data = query_result.dropna(subset=[lat_col, lon_col]).copy()
+            valid_data = valid_data[
+                (valid_data[lat_col].between(-90, 90)) & 
+                (valid_data[lon_col].between(-180, 180))
+            ].reset_index(drop=True)
             
-        # Create appropriate visualization based on question type
-        if 'ship' in question.lower():
-            # Ship tracking visualization
+            if valid_data.empty:
+                return None
+            
+            # Prepare data list for pydeck (simple approach)
+            visualization_data = []
+            for _, row in valid_data.iterrows():
+                point_data = {
+                    "lat": float(row[lat_col]),
+                    "lon": float(row[lon_col]),
+                    "position": [float(row[lon_col]), float(row[lat_col])]
+                }
+                
+                # Add other available columns for tooltip
+                for col in valid_data.columns:
+                    if col not in [lat_col, lon_col]:
+                        try:
+                            # Convert to string to avoid serialization issues
+                            point_data[col] = str(row[col])
+                        except:
+                            point_data[col] = "N/A"
+                            
+                visualization_data.append(point_data)
+            
+            # Create simple scatterplot layer
             layer = pdk.Layer(
                 "ScatterplotLayer",
-                data=valid_data,
-                get_position=[lon_col, lat_col],
-                get_color=[255, 0, 0, 160],
-                get_radius=100,
+                data=visualization_data,
+                get_position="position",
+                get_color=[0, 255, 0, 180],
+                get_radius=300,
                 radius_scale=1,
                 pickable=True,
                 auto_highlight=True
             )
             
-            tooltip = {"html": "<b>🚢 Vessel Info</b><br/>" + 
-                      "<br/>".join([f"<b>{col}:</b> {{{col}}}" for col in valid_data.columns[:6]])}
-        else:
-            # Satellite imagery visualization  
-            layer = pdk.Layer(
-                "ScatterplotLayer",
-                data=valid_data,
-                get_position=[lon_col, lat_col],
-                get_color=[0, 255, 0, 160],
-                get_radius=200,
-                radius_scale=1,
-                pickable=True,
-                auto_highlight=True
+            # Simple tooltip
+            tooltip = {
+                "html": "<b>🛰️ Satellite Data</b><br/><b>Lat:</b> {lat}<br/><b>Lon:</b> {lon}",
+                "style": {"background": "grey", "color": "white", "font-family": "Arial"}
+            }
+            
+            # Calculate center
+            center_lat = float(valid_data[lat_col].mean())
+            center_lon = float(valid_data[lon_col].mean())
+            
+            view_state = pdk.ViewState(
+                latitude=center_lat,
+                longitude=center_lon,
+                zoom=9,
+                pitch=0,
+                bearing=0
             )
             
-            tooltip = {"html": "<b>🛰️ Satellite Image</b><br/>" + 
-                      "<br/>".join([f"<b>{col}:</b> {{{col}}}" for col in valid_data.columns[:6]])}
-        
-        # Calculate optimal view
-        center_lat = valid_data[lat_col].median()
-        center_lon = valid_data[lon_col].median()
-        
-        view_state = pdk.ViewState(
-            latitude=center_lat,
-            longitude=center_lon,
-            zoom=10,
-            pitch=0,
-            bearing=0
-        )
-        
-        deck = pdk.Deck(
-            layers=[layer],
-            initial_view_state=view_state,
-            map_style='mapbox://styles/mapbox/satellite-v9',
-            tooltip=tooltip
-        )
-        
-        return deck
+            deck = pdk.Deck(
+                layers=[layer],
+                initial_view_state=view_state,
+                map_style='mapbox://styles/mapbox/satellite-v9',
+                tooltip=tooltip
+            )
+            
+            return deck
+            
+        except Exception as e:
+            st.error(f"Error creating geospatial visualization: {str(e)}")
+            return None
     
-    # Sample questions
+    # Sample questions (updated to match our satellite-only semantic model)
     sample_questions = [
-        "Which ships were closest to the San Francisco Bay Bridge?",
-        "Show me all high-quality satellite images captured near the Golden Gate Bridge",
-        "What satellite images were taken when large cargo ships were in the area?",
-        "Find images with low cloud coverage from the past month",
-        "Which ships spent the most time loitering in San Francisco Bay?",
-        "Show me satellite coverage of areas with high ship traffic density",
-        "What are the largest vessels that have been near Oakland port?",
-        "Find satellite images captured with resolution better than 5 meters"
+        "How many satellite images do we have?",
+        "Show me all satellite image locations on a map", 
+        "Where are our highest quality satellite images located?",
+        "Show me recent satellite images from the last 30 days",
+        "Show me all satellite images from the North Bay region",
+        "Where are all the WorldView satellite images located?",
+        "Show me locations of high resolution satellite images",
+        "What is the average quality score of our satellite images?"
     ]
     
-    # Create three columns for layout
-    col1, col2 = st.columns([1, 1])
+    # Single column layout for better readability
+    st.markdown("""
+    <div class="nga-section-header">
+        💬 AI Intelligence Assistant
+    </div>
+    """, unsafe_allow_html=True)
     
-    with col1:
-        st.markdown("""
-        <div class="nga-section-header">
-            💬 Natural Language Intelligence Queries
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Sample questions section
-        st.markdown("**🎯 Try these sample questions:**")
-        
-        # Create buttons for sample questions
-        cols = st.columns(2)
-        for i, question in enumerate(sample_questions):
-            with cols[i % 2]:
-                if st.button(f"🔍 {question[:40]}...", key=f"sample_{i}", help=question):
-                    st.session_state.current_question = question
-        
-        # Text input for custom questions
-        user_question = st.text_area(
-            "Ask your intelligence question:",
-            value=st.session_state.get('current_question', ''),
-            height=100,
-            placeholder="e.g., Which ships got closest to the Golden Gate Bridge yesterday?"
-        )
-        
-        col1_submit, col2_clear = st.columns([1, 1])
-        with col1_submit:
-            submit_button = st.button("🚀 Analyze", type="primary", use_container_width=True)
-        with col2_clear:
-            if st.button("🗑️ Clear Chat", use_container_width=True):
-                st.session_state.conversation_history = []
-                st.session_state.conversation_id = str(uuid.uuid4())
-                st.session_state.current_question = ""
-                st.rerun()
-        
-        # Process the question
-        if submit_button and user_question.strip():
-            with st.spinner("🤖 AI analyzing your question..."):
-                # Call Cortex Analyst
-                result = call_cortex_analyst(user_question, st.session_state.conversation_id)
-                
-                # Add to conversation history
-                st.session_state.conversation_history.append({
-                    "question": user_question,
-                    "result": result,
-                    "timestamp": datetime.now()
-                })
-                
-                # Clear the current question
-                if 'current_question' in st.session_state:
-                    del st.session_state.current_question
+    # Sample questions section
+    st.markdown("**🎯 Try these sample questions:**")
     
-    with col2:
-        st.markdown("""
-        <div class="nga-section-header">
-            🧠 AI Intelligence Analysis Results
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Display conversation history
-        if st.session_state.conversation_history:
-            for i, conv in enumerate(reversed(st.session_state.conversation_history[-5:])):  # Show last 5
-                with st.container():
-                    # Question
-                    st.markdown(f"""
-                    <div style="background: var(--nga-light-blue); color: white; padding: 1rem; border-radius: 0.5rem; margin-bottom: 0.5rem;">
-                        <h4 style="margin: 0; color: white;">❓ {conv['question']}</h4>
-                        <small style="opacity: 0.8;">{conv['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}</small>
-                    </div>
-                    """, unsafe_allow_html=True)
+    # Create buttons for sample questions in a more compact grid
+    cols = st.columns(4)
+    for i, question in enumerate(sample_questions):
+        with cols[i % 4]:
+            if st.button(f"🔍 {question[:25]}...", key=f"sample_{i}", help=question):
+                st.session_state.current_question = question
+    
+    # Text input for custom questions
+    user_question = st.text_area(
+        "Ask your intelligence question:",
+        value=st.session_state.get('current_question', ''),
+        height=100,
+        placeholder="e.g., Show me all satellite image locations on a map"
+    )
+    
+    col1_submit, col2_clear = st.columns([1, 1])
+    with col1_submit:
+        submit_button = st.button("🚀 Analyze", type="primary", use_container_width=True)
+    with col2_clear:
+        if st.button("🗑️ Clear Chat", use_container_width=True):
+            st.session_state.conversation_history = []
+            st.session_state.api_conversation_history = []
+            st.session_state.conversation_id = str(uuid.uuid4())
+            st.session_state.current_question = ""
+            st.rerun()
+    
+    st.markdown("---")
+    
+    # Process the question
+    if submit_button and user_question.strip():
+        with st.spinner("🤖 AI analyzing your question..."):
+            # Call Cortex Analyst
+            result = call_cortex_analyst(user_question, st.session_state.conversation_id)
+            
+            # Process and add to conversation history
+            processed_result = process_cortex_response(result)
+            st.session_state.conversation_history.append({
+                "question": user_question,
+                "result": processed_result,
+                "timestamp": datetime.now()
+            })
+            
+            # Clear the current question
+            if 'current_question' in st.session_state:
+                del st.session_state.current_question
+    
+    # Results section
+    st.markdown("""
+    <div class="nga-section-header">
+        🧠 AI Intelligence Analysis Results
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Display conversation history
+    if st.session_state.conversation_history:
+        for i, conv in enumerate(reversed(st.session_state.conversation_history[-5:])):  # Show last 5
+            with st.container():
+                # Question
+                st.markdown(f"""
+                <div style="background: var(--nga-light-blue); color: white; padding: 1rem; border-radius: 0.5rem; margin-bottom: 0.5rem;">
+                    <h4 style="margin: 0; color: white;">❓ {conv['question']}</h4>
+                    <small style="opacity: 0.8;">{conv['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}</small>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Result
+                if "error" in conv['result']:
+                    st.error(f"🚨 {conv['result']['error']}")
+                else:
+                    # Display AI response
+                    if 'answer' in conv['result']:
+                        st.markdown(f"""
+                        <div class="nga-info-box">
+                            <h4>🤖 AI Analysis:</h4>
+                            <p>{conv['result']['answer']}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
                     
-                    # Result
-                    if "error" in conv['result']:
-                        st.error(f"🚨 {conv['result']['error']}")
-                    else:
-                        # Display AI response
-                        if 'answer' in conv['result']:
-                            st.markdown(f"""
-                            <div class="nga-info-box">
-                                <h4>🤖 AI Analysis:</h4>
-                                <p>{conv['result']['answer']}</p>
-                            </div>
-                            """, unsafe_allow_html=True)
+                    # Display and execute SQL
+                    if 'sql' in conv['result']:
+                        st.markdown("**📝 Generated SQL Query:**")
+                        st.code(conv['result']['sql'], language='sql')
                         
-                        # Display and execute SQL
-                        if 'sql' in conv['result']:
-                            st.markdown("**📝 Generated SQL Query:**")
-                            st.code(conv['result']['sql'], language='sql')
+                        # Execute the SQL and show results
+                        with st.spinner("Executing query..."):
+                            query_result = execute_sql_query(conv['result']['sql'])
                             
-                            # Execute the SQL and show results
-                            with st.spinner("Executing query..."):
-                                query_result = execute_sql_query(conv['result']['sql'])
+                            if query_result is not None and not query_result.empty:
+                                st.markdown("**📊 Query Results:**")
+                                st.dataframe(query_result, use_container_width=True)
                                 
-                                if query_result is not None and not query_result.empty:
-                                    st.markdown("**📊 Query Results:**")
-                                    st.dataframe(query_result, use_container_width=True)
-                                    
-                                    # Create geospatial visualization
-                                    viz = create_geospatial_visualization(query_result, conv['question'])
-                                    if viz:
-                                        st.markdown("**🗺️ Geospatial Intelligence Visualization:**")
-                                        st.pydeck_chart(viz)
-                                    else:
-                                        st.info("💡 No geospatial data available for visualization")
-                                        
-                                    # Show basic analytics
-                                    if len(query_result) > 0:
-                                        st.markdown(f"""
-                                        <div class="nga-metric-card">
-                                            <h4>📈 Intelligence Summary</h4>
-                                            <strong>Records Found:</strong> {len(query_result)}<br>
-                                            <strong>Data Points:</strong> {query_result.shape[1]} columns<br>
-                                            <strong>Analysis Status:</strong> <span class="status-operational">✅ COMPLETED</span>
-                                        </div>
-                                        """, unsafe_allow_html=True)
+                                # Create geospatial visualization
+                                viz = create_geospatial_visualization(query_result, conv['question'])
+                                if viz:
+                                    st.markdown("**🗺️ Geospatial Intelligence Visualization:**")
+                                    st.pydeck_chart(viz)
                                 else:
-                                    st.warning("No data returned by the query")
-                    
-                    st.markdown("---")
-        else:
-            st.markdown("""
-            <div class="nga-info-box">
-                <h4>🚀 Welcome to AI Intelligence Assistant!</h4>
-                <p>Ask natural language questions about your satellite imagery and maritime data. 
-                The AI will generate SQL queries and create visualizations automatically.</p>
-                <p><strong>Examples:</strong></p>
-                <ul>
-                    <li>🛰️ "Show me high-quality images near the Golden Gate Bridge"</li>
-                    <li>⚓ "Which ships were closest to San Francisco Bay Bridge?"</li>
-                    <li>📊 "What's the average cloud coverage in satellite images this month?"</li>
-                </ul>
-            </div>
-            """, unsafe_allow_html=True)
+                                    st.info("💡 No geospatial data available for visualization")
+                                    
+                                # Show basic analytics
+                                if len(query_result) > 0:
+                                    st.markdown(f"""
+                                    <div class="nga-metric-card">
+                                        <h4>📈 Intelligence Summary</h4>
+                                        <strong>Records Found:</strong> {len(query_result)}<br>
+                                        <strong>Data Points:</strong> {query_result.shape[1]} columns<br>
+                                        <strong>Analysis Status:</strong> <span class="status-operational">✅ COMPLETED</span>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                            else:
+                                st.warning("No data returned by the query")
+                
+                st.markdown("---")
+    else:
+        st.markdown("""
+        <div class="nga-info-box">
+            <h4>🚀 Welcome to AI Intelligence Assistant!</h4>
+            <p>Ask natural language questions about your satellite imagery and maritime data. 
+            The AI will generate SQL queries and create visualizations automatically.</p>
+            <p><strong>Examples:</strong></p>
+            <ul>
+                <li>🛰️ "Show me high-quality images near the Golden Gate Bridge"</li>
+                <li>⚓ "Which ships were closest to San Francisco Bay Bridge?"</li>
+                <li>📊 "What's the average cloud coverage in satellite images this month?"</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
         
         # AI Assistant Information
         st.markdown("""
@@ -1584,7 +1742,7 @@ elif page == "📊 Intelligence Reports":
                 markers=True
             )
             st.plotly_chart(fig, use_container_width=True)
-        
+    
         with col2:
             fig = px.scatter(
                 latest_ops,
@@ -1605,16 +1763,16 @@ elif page == "📊 Intelligence Reports":
     
     with col1:
         st.metric("Quality Mean", f"{quality_distribution['mean']:.1f}%")
-        st.metric("Quality Std Dev", f"{quality_distribution['std']:.1f}%")
+    st.metric("Quality Std Dev", f"{quality_distribution['std']:.1f}%")
     
     with col2:
         st.metric("Quality Median", f"{quality_distribution['50%']:.1f}%")
-        st.metric("Quality Min", f"{quality_distribution['min']:.1f}%")
+    st.metric("Quality Min", f"{quality_distribution['min']:.1f}%")
     
     with col3:
         st.metric("Quality Max", f"{quality_distribution['max']:.1f}%")
-        high_quality_count = (filtered_df['COMBINED_QUALITY_SCORE'] >= 90).sum()
-        st.metric("High Quality Images", f"{high_quality_count:,}")
+    high_quality_count = (filtered_df['COMBINED_QUALITY_SCORE'] >= 90).sum()
+    st.metric("High Quality Images", f"{high_quality_count:,}")
     
     # Raw Data Export
     st.subheader("📋 Data Export")
@@ -1645,24 +1803,24 @@ elif page == "📊 Intelligence Reports":
 st.markdown("""
 <div class="nga-footer">
     <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 1rem;">
-        <div class="nga-logo-text" style="margin-right: 1rem;">N G A</div>
-        <div>
-            <h3 style="margin: 0; color: white;">National Geospatial-Intelligence Agency</h3>
-            <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">Imagery Intelligence Platform</p>
-        </div>
+    <div class="nga-logo-text" style="margin-right: 1rem;">N G A</div>
+    <div>
+        <h3 style="margin: 0; color: white;">National Geospatial-Intelligence Agency</h3>
+        <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">Imagery Intelligence Platform</p>
+    </div>
     </div>
     <div style="border-top: 2px solid var(--nga-gold); padding-top: 1rem; margin-top: 1rem;">
-        <p style="margin: 0.5rem 0; font-size: 0.9rem;">
-            <strong>Powered by:</strong> Snowflake Data Cloud • Apache Iceberg • Streamlit • PyDeck
-        </p>
-        <p style="margin: 0.5rem 0;">
-            <span class="status-operational">🟢 SYSTEM OPERATIONAL</span> | 
-            <span style="color: var(--nga-gold);">⚡ REAL-TIME INTELLIGENCE</span>
-        </p>
-        <p style="margin: 0.5rem 0; font-size: 0.8rem; opacity: 0.8;">
-            UNCLASSIFIED // FOR OFFICIAL USE ONLY<br>
-            © 2025 National Geospatial-Intelligence Agency
-        </p>
+    <p style="margin: 0.5rem 0; font-size: 0.9rem;">
+        <strong>Powered by:</strong> Snowflake Data Cloud • Apache Iceberg • Streamlit • PyDeck
+    </p>
+    <p style="margin: 0.5rem 0;">
+        <span class="status-operational">🟢 SYSTEM OPERATIONAL</span> | 
+        <span style="color: var(--nga-gold);">⚡ REAL-TIME INTELLIGENCE</span>
+    </p>
+    <p style="margin: 0.5rem 0; font-size: 0.8rem; opacity: 0.8;">
+        UNCLASSIFIED // FOR OFFICIAL USE ONLY<br>
+        © 2025 National Geospatial-Intelligence Agency
+    </p>
     </div>
 </div>
 """, unsafe_allow_html=True)
