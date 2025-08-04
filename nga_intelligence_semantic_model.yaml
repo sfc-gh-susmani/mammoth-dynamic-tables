@@ -2,289 +2,453 @@ name: "NGA Intelligence Data Model"
 description: "Semantic model for NGA satellite imagery and maritime intelligence data analysis"
 
 tables:
-  - name: "silver_imagery_metadata_iceberg"
-    description: "Satellite imagery metadata with comprehensive geospatial intelligence information"
+  - name: "satellite_imagery"
+    description: "Satellite imagery metadata with comprehensive geospatial intelligence information for NGA operations"
     base_table:
       database: "MAMMOTH"
       schema: "PUBLIC"  
       table: "silver_imagery_metadata_iceberg"
     
+    primary_key:
+      columns:
+        - "IMAGE_ID"
+    
     dimensions:
       - name: "image_id"
         expr: "IMAGE_ID"
         description: "Unique identifier for each satellite image"
-        data_type: "text"
-        
-      - name: "capture_date"
-        expr: "CAPTURE_DATE"
-        description: "Date when the satellite image was captured"
-        data_type: "date"
-        
-      - name: "capture_timestamp" 
-        expr: "CAPTURE_TIMESTAMP"
-        description: "Precise timestamp when the satellite image was captured"
-        data_type: "timestamp"
-        
-      - name: "latitude"
-        expr: "LATITUDE"
-        description: "Geographic latitude coordinate of the image center"
-        data_type: "number"
-        
-      - name: "longitude"
-        expr: "LONGITUDE" 
-        description: "Geographic longitude coordinate of the image center"
-        data_type: "number"
+        data_type: "TEXT"
+        unique: true
         
       - name: "sensor_type"
         expr: "SENSOR_TYPE"
         description: "Type of satellite sensor used to capture the image"
-        data_type: "text"
+        data_type: "TEXT"
+        synonyms:
+          - "sensor"
+          - "satellite sensor"
+        sample_values:
+          - "WorldView-3"
+          - "Landsat-8"
+          - "Sentinel-2"
         
       - name: "sensor_category"
         expr: "SENSOR_CATEGORY"
-        description: "Category classification of the satellite sensor (optical, radar, etc.)"
-        data_type: "text"
+        description: "Category classification of the satellite sensor (optical, radar, infrared, etc.)"
+        data_type: "TEXT"
+        synonyms:
+          - "sensor type"
+          - "imaging category"
+        sample_values:
+          - "Optical"
+          - "Radar"
+          - "Infrared"
         
       - name: "bay_region"
         expr: "BAY_REGION"
         description: "San Francisco Bay area region where the image was captured"
-        data_type: "text"
+        data_type: "TEXT"
+        synonyms:
+          - "region"
+          - "area"
+          - "location"
+        sample_values:
+          - "San Francisco"
+          - "Oakland"
+          - "Berkeley"
+          - "Marin"
+          - "Peninsula"
         
       - name: "closest_landmark"
         expr: "CLOSEST_LANDMARK"
         description: "Nearest landmark or point of interest to the image location"
-        data_type: "text"
+        data_type: "TEXT"
+        synonyms:
+          - "landmark"
+          - "poi"
+          - "point of interest"
+        sample_values:
+          - "Golden Gate Bridge"
+          - "Bay Bridge"
+          - "Downtown SF"
+          - "Oakland Port"
         
       - name: "resolution_category"
         expr: "RESOLUTION_CATEGORY"
-        description: "Image resolution quality category (high, medium, low resolution)"
-        data_type: "text"
+        description: "Image resolution quality category"
+        data_type: "TEXT"
+        synonyms:
+          - "resolution"
+          - "image quality"
+        sample_values:
+          - "Ultra High Resolution"
+          - "High Resolution"
+          - "Medium Resolution"
+          - "Low Resolution"
         
       - name: "image_format"
         expr: "IMAGE_FORMAT"
-        description: "File format of the satellite image (TIFF, JPEG, etc.)"
-        data_type: "text"
+        description: "File format of the satellite image"
+        data_type: "TEXT"
+        sample_values:
+          - "TIFF"
+          - "JPEG"
+          - "PNG"
         
       - name: "processing_status"
         expr: "PROCESSING_STATUS"
         description: "Current processing status of the image"
-        data_type: "text"
+        data_type: "TEXT"
+        sample_values:
+          - "PROCESSED"
+          - "PENDING"
+          - "FAILED"
         
       - name: "bands_available"
         expr: "BANDS_AVAILABLE"
         description: "Spectral bands available in the satellite image"
-        data_type: "text"
+        data_type: "TEXT"
         
       - name: "s3_key"
         expr: "S3_KEY"
         description: "S3 storage key for accessing the image file"
-        data_type: "text"
+        data_type: "TEXT"
         
-      - name: "h3_city"
-        expr: "H3_RES8_CITY"
-        description: "H3 spatial index at city resolution level"
-        data_type: "text"
+      - name: "latitude"
+        expr: "LATITUDE"
+        description: "Geographic latitude coordinate of the image center"
+        data_type: "NUMBER"
         
-      - name: "h3_neighborhood"
-        expr: "H3_RES9_NEIGHBORHOOD"
-        description: "H3 spatial index at neighborhood resolution level"
-        data_type: "text"
+      - name: "longitude"
+        expr: "LONGITUDE" 
+        description: "Geographic longitude coordinate of the image center"
+        data_type: "NUMBER"
     
-    measures:
-      - name: "total_images"
-        expr: "COUNT(*)"
-        description: "Total number of satellite images"
-        data_type: "number"
+    time_dimensions:
+      - name: "capture_date"
+        expr: "CAPTURE_DATE"
+        description: "Date when the satellite image was captured"
+        data_type: "DATE"
+        synonyms:
+          - "image date"
+          - "capture time"
+          - "acquisition date"
         
+      - name: "capture_timestamp"
+        expr: "CAPTURE_TIMESTAMP"
+        description: "Precise timestamp when the satellite image was captured"
+        data_type: "TIMESTAMP"
+        synonyms:
+          - "capture time"
+          - "acquisition timestamp"
+        
+      - name: "upload_timestamp"
+        expr: "UPLOAD_TIMESTAMP"
+        description: "Timestamp when the image was uploaded to the system"
+        data_type: "TIMESTAMP"
+    
+    facts:
       - name: "resolution_meters"
         expr: "RESOLUTION_METERS"
         description: "Spatial resolution in meters per pixel"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "pixel resolution"
+          - "ground resolution"
         
-      - name: "file_size_mb"
-        expr: "FILE_SIZE_BYTES / 1048576"
-        description: "Image file size in megabytes"
-        data_type: "number"
+      - name: "file_size_bytes"
+        expr: "FILE_SIZE_BYTES"
+        description: "Image file size in bytes"
+        data_type: "NUMBER"
         
       - name: "data_quality_score"
         expr: "DATA_QUALITY_SCORE"
         description: "Technical quality score of the image data (0-100)"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "quality"
+          - "image quality"
         
       - name: "combined_quality_score"
         expr: "COMBINED_QUALITY_SCORE"
         description: "Overall quality score combining technical and operational factors (0-100)"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "quality score"
+          - "overall quality"
+          - "quality"
         
       - name: "cloud_coverage_percent"
         expr: "CLOUD_COVERAGE_PERCENT"
         description: "Percentage of image covered by clouds (0-100)"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "cloud coverage"
+          - "clouds"
+          - "cloud percent"
         
       - name: "coverage_hectares"
         expr: "ESTIMATED_COVERAGE_HECTARES"
         description: "Estimated ground coverage area in hectares"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "coverage area"
+          - "area covered"
         
-      - name: "distance_to_sf_downtown_km"
-        expr: "DISTANCE_TO_SF_DOWNTOWN_M / 1000"
-        description: "Distance to San Francisco downtown in kilometers"
-        data_type: "number"
+      - name: "distance_to_sf_downtown"
+        expr: "DISTANCE_TO_SF_DOWNTOWN_M"
+        description: "Distance to San Francisco downtown in meters"
+        data_type: "NUMBER"
         
-      - name: "distance_to_golden_gate_km"
-        expr: "DISTANCE_TO_GOLDEN_GATE_M / 1000"
-        description: "Distance to Golden Gate Bridge in kilometers"
-        data_type: "number"
+      - name: "distance_to_golden_gate"
+        expr: "DISTANCE_TO_GOLDEN_GATE_M"
+        description: "Distance to Golden Gate Bridge in meters"
+        data_type: "NUMBER"
         
-      - name: "distance_to_bay_bridge_km"
-        expr: "DISTANCE_TO_BAY_BRIDGE_M / 1000"
-        description: "Distance to Bay Bridge in kilometers"
-        data_type: "number"
+      - name: "distance_to_bay_bridge"
+        expr: "DISTANCE_TO_BAY_BRIDGE_M"
+        description: "Distance to Bay Bridge in meters"
+        data_type: "NUMBER"
         
-      - name: "distance_to_oakland_km"
-        expr: "DISTANCE_TO_OAKLAND_M / 1000"
-        description: "Distance to Oakland in kilometers"
-        data_type: "number"
+      - name: "distance_to_oakland"
+        expr: "DISTANCE_TO_OAKLAND_M"
+        description: "Distance to Oakland in meters"
+        data_type: "NUMBER"
+
+    metrics:
+      - name: "total_images"
+        expr: "COUNT(*)"
+        description: "Total number of satellite images"
+        data_type: "NUMBER"
+        synonyms:
+          - "image count"
+          - "number of images"
         
       - name: "avg_quality_score"
         expr: "AVG(COMBINED_QUALITY_SCORE)"
         description: "Average quality score across images"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "average quality"
+          - "mean quality"
         
       - name: "total_coverage_hectares"
         expr: "SUM(ESTIMATED_COVERAGE_HECTARES)"
         description: "Total ground coverage area in hectares"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "total coverage"
+          - "total area"
+        
+      - name: "high_quality_image_count"
+        expr: "COUNT(CASE WHEN COMBINED_QUALITY_SCORE >= 90 THEN 1 END)"
+        description: "Number of high quality images (quality score >= 90)"
+        data_type: "NUMBER"
+        synonyms:
+          - "high quality images"
+          - "excellent images"
 
-  - name: "ship_tracking_data"
+  - name: "ship_tracking"
     description: "Real-time ship tracking and maritime vessel information from AIS data"
     base_table:
       database: "GEO_DATA"
       schema: "PUBLIC"
       table: "AIS"
     
+    primary_key:
+      columns:
+        - "MMSI"
+        - "BASEDATETIME"
+    
     dimensions:
       - name: "mmsi"
         expr: "MMSI"
         description: "Maritime Mobile Service Identity - unique ship identifier"
-        data_type: "text"
+        data_type: "NUMBER"
+        synonyms:
+          - "ship id"
+          - "vessel id"
+          - "maritime id"
+        unique: false
         
       - name: "vessel_name"
         expr: "VESSELNAME"
         description: "Name of the vessel or ship"
-        data_type: "text"
-        
-      - name: "vessel_type_code"
-        expr: "VESSELTYPE"
-        description: "Numeric code indicating type of vessel"
-        data_type: "number"
+        data_type: "TEXT"
+        synonyms:
+          - "ship name"
+          - "boat name"
+          - "vessel"
         
       - name: "imo_number"
         expr: "IMO"
         description: "International Maritime Organization number"
-        data_type: "text"
+        data_type: "TEXT"
+        synonyms:
+          - "imo"
+          - "international maritime number"
         
       - name: "call_sign"
         expr: "CALLSIGN"
         description: "Radio call sign of the vessel"
-        data_type: "text"
+        data_type: "TEXT"
+        synonyms:
+          - "callsign"
+          - "radio sign"
         
       - name: "ship_latitude"
         expr: "LAT"
         description: "Current latitude position of the ship"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "latitude"
+          - "lat"
+          - "ship lat"
         
       - name: "ship_longitude"
         expr: "LON"
         description: "Current longitude position of the ship"
-        data_type: "number"
-        
-      - name: "timestamp"
-        expr: "BASEDATETIME"
-        description: "Timestamp of the ship position report"
-        data_type: "timestamp"
-        
-      - name: "status_code"
-        expr: "STATUS"
-        description: "Navigational status code of the vessel"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "longitude" 
+          - "lon"
+          - "ship lon"
         
       - name: "transceiver_class"
         expr: "TRANSCEIVERCLASS"
         description: "Class of AIS transceiver equipment"
-        data_type: "text"
+        data_type: "TEXT"
     
-    measures:
+    time_dimensions:
+      - name: "timestamp"
+        expr: "BASEDATETIME"
+        description: "Timestamp of the ship position report"
+        data_type: "TIMESTAMP"
+        synonyms:
+          - "time"
+          - "datetime"
+          - "position time"
+    
+    facts:
       - name: "speed_over_ground"
         expr: "SOG"
         description: "Speed over ground in knots"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "speed"
+          - "vessel speed"
+          - "sog"
         
       - name: "course_over_ground"
         expr: "COG"
         description: "Course over ground in degrees"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "course"
+          - "direction"
+          - "cog"
         
       - name: "heading_degrees"
         expr: "HEADING"
         description: "Ship heading in degrees"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "heading"
+          - "ship heading"
         
-      - name: "vessel_length_meters"
+      - name: "vessel_length"
         expr: "LENGTH"
         description: "Length of the vessel in meters"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "length"
+          - "ship length"
         
-      - name: "vessel_width_meters"
+      - name: "vessel_width"
         expr: "WIDTH"
         description: "Width of the vessel in meters"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "width"
+          - "beam"
+          - "ship width"
         
-      - name: "vessel_draft_meters"
+      - name: "vessel_draft"
         expr: "DRAFT"
         description: "Draft of the vessel in meters"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "draft"
+          - "ship draft"
+        
+      - name: "vessel_type_code"
+        expr: "VESSELTYPE"
+        description: "Numeric code indicating type of vessel"
+        data_type: "NUMBER"
+        
+      - name: "status_code"
+        expr: "STATUS"
+        description: "Navigational status code of the vessel"
+        data_type: "NUMBER"
         
       - name: "cargo_capacity"
         expr: "CARGO"
         description: "Cargo capacity of the vessel"
-        data_type: "number"
-        
+        data_type: "NUMBER"
+
+    metrics:
       - name: "total_ships"
         expr: "COUNT(DISTINCT MMSI)"
         description: "Total number of unique ships"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "ship count"
+          - "number of ships"
+          - "vessel count"
         
       - name: "total_positions"
         expr: "COUNT(*)"
         description: "Total number of position reports"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "position count"
+          - "reports"
         
-      - name: "avg_speed_knots"
+      - name: "avg_speed"
         expr: "AVG(SOG)"
         description: "Average speed over ground in knots"
-        data_type: "number"
+        data_type: "NUMBER"
+        synonyms:
+          - "average speed"
+          - "mean speed"
+        
+      - name: "max_speed"
+        expr: "MAX(SOG)"
+        description: "Maximum speed recorded in knots"
+        data_type: "NUMBER"
+        synonyms:
+          - "maximum speed"
+          - "top speed"
 
 relationships:
-  - name: "imagery_ship_spatial_proximity"
-    description: "Spatial relationship between satellite images and ship positions based on geographic proximity"
-    left_table: "silver_imagery_metadata_iceberg"
-    right_table: "ship_tracking_data"
+  - name: "imagery_ships_spatial"
+    left_table: "satellite_imagery"
+    right_table: "ship_tracking"
     join_type: "left_outer"
-    join_condition: |
-      ST_DWITHIN(
-        ST_MAKEPOINT(silver_imagery_metadata_iceberg.LONGITUDE, silver_imagery_metadata_iceberg.LATITUDE),
-        ST_MAKEPOINT(ship_tracking_data.LON, ship_tracking_data.LAT),
-        5000
-      )
-    description_join: "Links satellite images with ships within 5km radius for maritime intelligence analysis"
+    relationship_type: "one_to_many"
+    relationship_columns:
+      - left_column: "latitude"
+        right_column: "ship_latitude"
+      - left_column: "longitude" 
+        right_column: "ship_longitude"
 
 verified_queries:
   - name: "high_quality_recent_images"
     question: "What are the highest quality satellite images from the last week?"
+    verified_at: "2024-08-04"
     sql: |
       SELECT image_id, capture_date, combined_quality_score, bay_region, closest_landmark
-      FROM silver_imagery_metadata_iceberg 
+      FROM satellite_imagery 
       WHERE capture_date >= CURRENT_DATE - 7
       AND combined_quality_score >= 90
       ORDER BY combined_quality_score DESC
@@ -292,15 +456,16 @@ verified_queries:
       
   - name: "ships_near_bay_bridge"
     question: "Which ships got closest to the San Francisco Bay Bridge?"
+    verified_at: "2024-08-04"
     sql: |
-      SELECT DISTINCT mmsi, vesselname, 
-             MIN(ST_DISTANCE(ST_MAKEPOINT(lon, lat), ST_MAKEPOINT(-122.3735, 37.7983))) as min_distance_meters,
-             MIN(basedatetime) as first_sighting,
-             MAX(basedatetime) as last_sighting
-      FROM GEO_DATA.PUBLIC.AIS
-      WHERE lat BETWEEN 37.7 AND 37.9 
-      AND lon BETWEEN -122.5 AND -122.3
-      GROUP BY mmsi, vesselname
+      SELECT DISTINCT mmsi, vessel_name, 
+             MIN(ST_DISTANCE(ST_MAKEPOINT(ship_longitude, ship_latitude), ST_MAKEPOINT(-122.3735, 37.7983))) as min_distance_meters,
+             MIN(timestamp) as first_sighting,
+             MAX(timestamp) as last_sighting
+      FROM ship_tracking
+      WHERE ship_latitude BETWEEN 37.7 AND 37.9 
+      AND ship_longitude BETWEEN -122.5 AND -122.3
+      GROUP BY mmsi, vessel_name
       ORDER BY min_distance_meters ASC
       LIMIT 20
 
@@ -310,24 +475,23 @@ custom_instructions: |
   - Provide geographic context using bay_region and closest_landmark fields
   - Consider both technical quality (data_quality_score) and overall quality (combined_quality_score)
   - Include S3 keys when users might need to access actual image files
+  - Use proper distance calculations for proximity analysis
   
   When answering questions about ships:
   - Use vessel names when available, otherwise use MMSI identifiers
   - Include temporal context (timestamps) for tracking movements
   - Consider vessel types and sizes for operational context
   - Calculate distances using ST_DISTANCE for proximity analysis
+  - Group by MMSI when analyzing vessel patterns over time
   
   For combined imagery and maritime questions:
   - Use spatial joins to correlate ship positions with satellite coverage areas
   - Consider temporal alignment between image capture times and ship positions
   - Highlight potential intelligence value of correlating these data sources
-
-sample_questions:
-  - "Show me all high-quality satellite images captured near the Golden Gate Bridge"
-  - "Which ships were closest to the San Francisco Bay Bridge?"
-  - "What satellite images were taken when large cargo ships were in the area?"
-  - "Find images with low cloud coverage from the past month"
-  - "Which ships spent the most time loitering in San Francisco Bay?"
-  - "Show me satellite coverage of areas with high ship traffic density"
-  - "What are the largest vessels that have been near Oakland port?"
-  - "Find satellite images captured during daylight hours with resolution better than 5 meters" 
+  - Focus on areas of high strategic importance like bridges, ports, and waterways
+  
+  General guidelines:
+  - Always provide context for numerical results (units, timeframes, etc.)
+  - When showing distances, convert meters to kilometers for readability when > 1000m
+  - Include quality thresholds and filtering criteria in explanations
+  - Prioritize recent data when temporal context is relevant 

@@ -1276,28 +1276,34 @@ elif page == "🤖 AI Intelligence Assistant":
     
     # Cortex Analyst helper functions
     def call_cortex_analyst(question, conversation_id=None):
-        """Call Cortex Analyst REST API"""
+        """Call Cortex Analyst using proper function format"""
         try:
-            # Get current session for authentication
-            current_session = get_active_session()
+            # Escape single quotes in the question to prevent SQL injection
+            escaped_question = question.replace("'", "''")
             
-            # Prepare the request payload
-            payload = {
-                "semantic_model": f"@nga_app_stage/semantic_models/nga_intelligence_semantic_model.yaml",
-                "question": question
-            }
-            
+            # Build the SQL query with proper function call
             if conversation_id:
-                payload["conversation_id"] = conversation_id
+                sql_query = f"""
+                    SELECT SNOWFLAKE.CORTEX.ANALYST(
+                        OBJECT_CONSTRUCT(
+                            'semantic_model', '@nga_app_stage/semantic_models/nga_intelligence_semantic_model.yaml',
+                            'question', '{escaped_question}',
+                            'conversation_id', '{conversation_id}'
+                        )
+                    ) as response
+                """
+            else:
+                sql_query = f"""
+                    SELECT SNOWFLAKE.CORTEX.ANALYST(
+                        OBJECT_CONSTRUCT(
+                            'semantic_model', '@nga_app_stage/semantic_models/nga_intelligence_semantic_model.yaml',
+                            'question', '{escaped_question}'
+                        )
+                    ) as response
+                """
             
-            # Use the session's connection to make the request
-            response = current_session.sql(f"""
-                SELECT SNOWFLAKE.CORTEX.ANALYST(
-                    '@nga_app_stage/semantic_models/nga_intelligence_semantic_model.yaml',
-                    '{question}',
-                    '{conversation_id if conversation_id else str(uuid.uuid4())}'
-                ) as response
-            """).collect()
+            # Execute the query
+            response = session.sql(sql_query).collect()
             
             if response and len(response) > 0:
                 result = json.loads(response[0]['RESPONSE'])
@@ -1323,8 +1329,8 @@ elif page == "🤖 AI Intelligence Assistant":
             return None
             
         # Check if we have location data (lat/lon or coordinates)
-        lat_cols = [col for col in query_result.columns if 'lat' in col.lower()]
-        lon_cols = [col for col in query_result.columns if 'lon' in col.lower()]
+        lat_cols = [col for col in query_result.columns if 'lat' in col.lower() or 'latitude' in col.lower()]
+        lon_cols = [col for col in query_result.columns if 'lon' in col.lower() or 'longitude' in col.lower()]
         
         if not lat_cols or not lon_cols:
             return None
