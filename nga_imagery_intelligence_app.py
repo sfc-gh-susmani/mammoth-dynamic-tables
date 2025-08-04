@@ -10,6 +10,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import pydeck as pdk
+import json
 from datetime import datetime, timedelta
 from snowflake.snowpark.context import get_active_session
 from snowflake.snowpark.functions import col
@@ -381,7 +382,7 @@ st.sidebar.markdown("""
 
 page = st.sidebar.selectbox(
     "Select Intelligence Module",
-    ["🏠 Operational Dashboard", "🛰️ Imagery Viewer", "🗺️ Geospatial Analysis", "📊 Intelligence Reports"]
+    ["🏠 Operational Dashboard", "🛰️ Imagery Viewer", "🗺️ Geospatial Analysis", "⚓ Maritime Intelligence", "📊 Intelligence Reports"]
 )
 
 # NGA Sidebar Filters
@@ -839,6 +840,405 @@ elif page == "🗺️ Geospatial Analysis":
                 st.error(f"Error creating regional quality chart: {str(e)}")
     else:
         st.info("No data available for H3 spatial analysis. Please adjust your filters.")
+
+elif page == "⚓ Maritime Intelligence":
+    st.markdown("""
+    <div class="nga-main-header">
+        <div style="text-align: center; padding: 2.5rem;">
+            <div style="background: rgba(255,255,255,0.95); color: var(--nga-navy); padding: 1rem 2rem; border-radius: 0.5rem; margin-bottom: 1.5rem; font-weight: 700; font-size: 1.1rem; letter-spacing: 3px; border: 3px solid var(--nga-gold); display: inline-block; box-shadow: 0 6px 20px rgba(0,0,0,0.3);">
+                NATIONAL GEOSPATIAL-INTELLIGENCE AGENCY
+            </div>
+            <h1 style="margin: 0; color: white; font-size: 2.8rem; font-weight: 700; text-shadow: 2px 2px 6px rgba(0,0,0,0.5); margin-bottom: 1rem;">
+                ⚓ Maritime Intelligence Platform
+            </h1>
+            <div style="color: white; opacity: 0.95; font-size: 1.2rem; font-weight: 500; letter-spacing: 1px;">
+                Ship Density Analysis • Vessel Tracking • Maritime Threat Detection
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Add custom CSS for reduced margins and padding
+    st.markdown("""
+        <style>
+            .block-container {
+                padding-top: 1rem;
+                padding-bottom: 0rem;
+                padding-left: 2rem;
+                padding-right: 2rem;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    # Create two columns for controls and map
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        st.markdown("""
+        <div class="nga-section-header">
+            🛰️ Ship Density Heat Map Analysis
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Ship density query using H3 hexagons
+        ship_density_query = """
+        WITH h3_ship_counts AS (
+            SELECT 
+                H3_POINT_TO_CELL(ST_MAKEPOINT(lon, lat), 9) AS h3_cell, 
+                COUNT(*) AS ship_count
+            FROM "GEO_DATA"."PUBLIC"."AIS"
+            WHERE LAT BETWEEN 37.7034 AND 37.8324  -- San Francisco Bay Area
+            AND LON BETWEEN -123.7003 AND -122.1385   -- AOI Longitude Bounds
+            GROUP BY h3_cell
+        )
+        SELECT 
+            '{ "type": "FeatureCollection", "features": [' || 
+            LISTAGG(
+                '{ "type": "Feature", "geometry": { "type": "Polygon", "coordinates":' || 
+                CAST(ST_ASGEOJSON(H3_CELL_TO_BOUNDARY(h3_cell)):coordinates AS STRING) ||
+                ' }, "properties": {' ||
+                '"ship_count":' || ship_count || ', ' ||
+                '"color": ' || 
+                    CASE 
+                        WHEN ship_count >= 50 THEN '[255, 0, 0, 255]'
+                        WHEN ship_count >= 20 THEN '[255, 165, 0, 255]'
+                        WHEN ship_count >= 5  THEN '[255, 255, 0, 255]'
+                        ELSE '[0, 255, 0, 255]'
+                    END || 
+                '}} ', 
+                ','
+            ) 
+            || '] }' AS geojson_output
+        FROM h3_ship_counts
+        """
+        
+        try:
+            # Execute query and get results
+            result = session.sql(ship_density_query).collect()
+            
+            if result and result[0].GEOJSON_OUTPUT:
+                geojson_str = result[0].GEOJSON_OUTPUT
+                geojson_data = json.loads(geojson_str)
+                
+                # Create PyDeck layer for ship density
+                layer = pdk.Layer(
+                    "GeoJsonLayer",
+                    data=geojson_data['features'],
+                    opacity=0.8,
+                    stroked=True,
+                    filled=True,
+                    extruded=False,
+                    get_fill_color='properties.color',
+                    get_line_color=[0, 0, 0],
+                    line_width_minimum_pixels=2,
+                    pickable=True,
+                    auto_highlight=True    
+                )
+                
+                # Create view state for San Francisco Bay
+                view_state = pdk.ViewState(
+                    latitude=37.7749,
+                    longitude=-122.4194,    
+                    zoom=10,
+                    pitch=0,
+                    bearing=0
+                )
+                
+                # Create the deck
+                deck = pdk.Deck(
+                    layers=[layer],    
+                    map_style='mapbox://styles/mapbox/satellite-v9',
+                    tooltip={"text": "Ship Count: {ship_count}"}, 
+                    initial_view_state=view_state
+                )
+                
+                # Display the map
+                st.pydeck_chart(deck)
+                
+                # Add legend
+                st.markdown("""
+                <div class="nga-quality-legend">
+                    <h4>🗺️ Ship Density Legend</h4>
+                    <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                        <span>🔴 High Density (50+ ships)</span>
+                        <span>🟠 Medium Density (20-49 ships)</span>
+                        <span>🟡 Low Density (5-19 ships)</span>
+                        <span>🟢 Sparse (<5 ships)</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            else:
+                st.warning("No ship density data available")
+                
+        except Exception as e:
+            st.error(f"Error loading ship density data: {str(e)}")
+            st.info("Ensure you have access to GEO_DATA.PUBLIC.AIS table")
+        
+        # Vessel type analysis
+        st.markdown("""
+        <div class="nga-section-header">
+            🚢 Vessel Type Distribution Analysis
+        </div>
+        """, unsafe_allow_html=True)
+        
+        vessel_query = '''
+        SELECT 
+            vt.VESSELTYPE,
+            vt.DESCRIPTION,
+            COUNT(a.VESSELTYPE) as vessel_count
+        FROM GEO_DATA.PUBLIC.VESSEL_TYPES vt
+        LEFT JOIN GEO_DATA.PUBLIC.AIS a 
+            ON vt.VESSELTYPE = a.VESSELTYPE
+            AND LAT BETWEEN 37.7034 AND 37.8324  -- San Francisco Bay Area
+            AND LON BETWEEN -123.7003 AND -122.1385  -- AOI Longitude Bounds
+        GROUP BY 
+            vt.VESSELTYPE,
+            vt.DESCRIPTION
+        HAVING vessel_count > 0
+        ORDER BY 
+            vessel_count DESC
+        LIMIT 15;
+        '''
+        
+        try:
+            vessel_result = session.sql(vessel_query).collect()
+            
+            if vessel_result:
+                # Convert to pandas DataFrame
+                vessel_df = pd.DataFrame(vessel_result)
+                
+                # Create enhanced bar chart with NGA colors
+                nga_colors = [
+                    '#1B365C', '#2E5C8A', '#4A7BA7', '#FDB515', '#D32F2F',
+                    '#00FF9F', '#FF3366', '#00CCFF', '#FFD700', '#FF6B6B',
+                    '#4DEEEA', '#74EE15', '#FFB400', '#F000FF', '#17FF74'
+                ]
+                
+                fig = px.bar(
+                    vessel_df,
+                    x='DESCRIPTION',
+                    y='VESSEL_COUNT',
+                    title='🚢 Maritime Vessel Classification Analysis',
+                    labels={'DESCRIPTION': 'Vessel Type', 'VESSEL_COUNT': 'Count'},
+                    color='DESCRIPTION',
+                    color_discrete_sequence=nga_colors,
+                )
+                
+                fig.update_layout(
+                    xaxis_tickangle=-60,
+                    xaxis={'categoryorder': 'total descending'},
+                    font=dict(family="Open Sans", size=10),
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                )
+                
+                fig.update_traces(width=0.7)
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Display vessel data table
+                st.markdown("**🔍 Detailed Vessel Intelligence:**")
+                st.dataframe(vessel_df, use_container_width=True)
+                
+            else:
+                st.warning("No vessel type data available")
+                
+        except Exception as e:
+            st.error(f"Error loading vessel data: {str(e)}")
+    
+    with col2:
+        st.markdown("""
+        <div class="nga-section-header">
+            🏗️ Critical Infrastructure Monitoring
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Ships near infrastructure query
+        infrastructure_query = '''
+        WITH params AS (
+            SELECT 37.8 AS base_lat, 150 AS buffer_meters
+        ),
+        buffered_polygon AS (
+            SELECT ST_BUFFER(
+                TO_GEOMETRY('LINESTRING (
+                    -122.388382 37.788624,
+                    -122.363148 37.812632,
+                    -122.354221 37.818056,
+                    -122.320404 37.822938
+                )', 4326),
+                (buffer_meters / 111320.0) -- convert meters to degrees
+            ) AS geom
+            FROM params
+        ),
+        features AS (
+            SELECT
+                '{
+                    "type": "Feature",
+                    "geometry": ' || TO_VARCHAR(ST_ASGEOJSON(TO_GEOMETRY('POINT(' || a.lon || ' ' || a.lat || ')', 4326))) || ',
+                    "properties": {
+                        "MMSI": "' || a.MMSI || '",
+                        "name": "' || a.vesselname || '",
+                        "timestamp": "' || TO_VARCHAR(a.basedatetime) || '",
+                        "color": [255, 0, 0, 255]
+                    }
+                }' AS feature
+            FROM GEO_DATA.PUBLIC.AIS a
+            JOIN buffered_polygon b
+              ON ST_INTERSECTS(
+                   TO_GEOMETRY('POINT(' || a.lon || ' ' || a.lat || ')', 4326),
+                   b.geom
+                 )
+        ),
+        feature_collection AS (
+            SELECT
+                '{ "type": "FeatureCollection", "features": [' ||
+                LISTAGG(feature, ',') || '] }' AS geojson
+            FROM features
+        )
+        SELECT geojson
+        FROM feature_collection;
+        '''
+        
+        try:
+            infra_result = session.sql(infrastructure_query).collect()
+            
+            if infra_result and infra_result[0].GEOJSON:
+                geojson_str_infra = infra_result[0].GEOJSON
+                geojson_data_infra = json.loads(geojson_str_infra)
+                
+                # Create view state for infrastructure monitoring
+                view_state_infra = pdk.ViewState(
+                    latitude=37.7749,
+                    longitude=-122.3194, 
+                    zoom=11,
+                    pitch=0,
+                    bearing=0
+                )
+                
+                layer_infra = pdk.Layer(
+                    "GeoJsonLayer",
+                    data=geojson_data_infra['features'],
+                    opacity=0.8,
+                    stroked=True,
+                    filled=True,
+                    extruded=False,
+                    get_fill_color=[255, 0, 0, 255],  # Red for security alerts
+                    get_line_color=[0, 0, 0],
+                    line_width_minimum_pixels=2,
+                    point_radius_min_pixels=8,
+                    pickable=True,
+                    auto_highlight=True
+                )
+                
+                # Create infrastructure monitoring deck
+                deck_infra = pdk.Deck(
+                    layers=[layer_infra],    
+                    map_style='mapbox://styles/mapbox/satellite-v9',
+                    tooltip={"text": "🚨 Vessel: {name}\n📡 MMSI: {MMSI}"}, 
+                    initial_view_state=view_state_infra
+                )
+                
+                # Display infrastructure monitoring map
+                st.pydeck_chart(deck_infra)
+                
+                st.markdown("""
+                <div class="nga-info-box">
+                    <h4>🚨 Security Alert System</h4>
+                    <p>Monitoring vessels within 150m of critical maritime infrastructure. 
+                    Red markers indicate potential security concerns requiring analysis.</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            else:
+                st.info("No vessels detected near critical infrastructure")
+                
+        except Exception as e:
+            st.error(f"Error loading infrastructure data: {str(e)}")
+        
+        # Ship loitering analysis
+        st.markdown("""
+        <div class="nga-section-header">
+            🎯 Loitering Pattern Analysis
+        </div>
+        """, unsafe_allow_html=True)
+        
+        loitering_query = """
+        WITH ship_data AS (
+            SELECT * 
+            FROM "GEO_DATA"."PUBLIC"."AIS"
+            WHERE LAT BETWEEN 37.7034 AND 37.8324  -- San Francisco Bay Area
+            AND LON BETWEEN -123.7003 AND -122.1385  -- AOI Longitude Bounds
+        ),
+        ship_interactions AS (
+            SELECT 
+                a.MMSI AS Ship1_MMSI,
+                b.MMSI AS Ship2_MMSI,
+                COUNT(*) as interaction_count
+            FROM ship_data a
+            JOIN ship_data b 
+                ON a.MMSI < b.MMSI  -- Avoid self-join with same ship
+                AND ABS(DATEDIFF(second, a.BASEDATETIME, b.BASEDATETIME)) <= 60  -- Max 60 sec difference
+                AND ST_DISTANCE(
+                    ST_MAKEPOINT(a.LON, a.LAT), 
+                    ST_MAKEPOINT(b.LON, b.LAT)
+                ) <= 100  -- 100m proximity
+            GROUP BY Ship1_MMSI, Ship2_MMSI
+            HAVING COUNT(*) > 5
+        )
+        SELECT 
+            a.MMSI AS Ship1_MMSI,
+            b.MMSI AS Ship2_MMSI,
+            a.BASEDATETIME AS Timestamp1,
+            b.BASEDATETIME AS Timestamp2,
+            ST_DISTANCE(
+                ST_MAKEPOINT(a.LON, a.LAT), 
+                ST_MAKEPOINT(b.LON, b.LAT)
+            ) AS Distance_Meters
+        FROM ship_data a
+        JOIN ship_data b 
+            ON a.MMSI < b.MMSI
+            AND ABS(DATEDIFF(second, a.BASEDATETIME, b.BASEDATETIME)) <= 60
+            AND ST_DISTANCE(
+                ST_MAKEPOINT(a.LON, a.LAT), 
+                ST_MAKEPOINT(b.LON, b.LAT)
+            ) <= 100
+        JOIN ship_interactions si 
+            ON si.Ship1_MMSI = a.MMSI 
+            AND si.Ship2_MMSI = b.MMSI
+        ORDER BY a.BASEDATETIME, Distance_Meters
+        LIMIT 50;
+        """
+        
+        try:
+            loitering_result = session.sql(loitering_query).collect()
+            
+            if loitering_result:
+                st.markdown("**🔍 Suspicious Maritime Activity Detection:**")
+                loitering_df = pd.DataFrame(loitering_result)
+                st.dataframe(loitering_df, use_container_width=True)
+                
+                # Analysis summary
+                if len(loitering_df) > 0:
+                    unique_ships = set(loitering_df['SHIP1_MMSI'].tolist() + loitering_df['SHIP2_MMSI'].tolist())
+                    avg_distance = loitering_df['DISTANCE_METERS'].mean()
+                    
+                    st.markdown(f"""
+                    <div class="nga-metric-card">
+                        <h4>📊 Loitering Intelligence Summary</h4>
+                        <strong>Suspicious Interactions:</strong> {len(loitering_result)}<br>
+                        <strong>Unique Vessels:</strong> {len(unique_ships)}<br>
+                        <strong>Avg Proximity:</strong> {avg_distance:.1f}m<br>
+                        <span class="status-warning">⚠️ MONITORING REQUIRED</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.success("✅ No suspicious loitering patterns detected")
+                    
+            else:
+                st.success("✅ No suspicious loitering patterns detected")
+                
+        except Exception as e:
+            st.error(f"Error analyzing loitering patterns: {str(e)}")
 
 elif page == "📊 Intelligence Reports":
     st.subheader("📊 Intelligence Analysis Reports")
