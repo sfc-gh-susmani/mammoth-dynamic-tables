@@ -122,39 +122,45 @@ $$
         SELECT ROW_NUMBER() OVER (ORDER BY SEQ4()) AS RN
         FROM TABLE(GENERATOR(ROWCOUNT => NUM_RECORDS))
     ),
+    BASE_TIMESTAMPS AS (
+        SELECT 
+            RN,
+            DATEADD(SECOND, -UNIFORM(1, 31536000, RANDOM()), CURRENT_TIMESTAMP())::TIMESTAMP_NTZ AS BASE_CAPTURE_TIME
+        FROM SEQUENCE_CTE
+    ),
     SATELLITE_DATA AS (
         SELECT 
             -- Primary identifiers
             'IMG_' || LPAD(RN, 12, '0') || '_' || RANDSTR(8, RANDOM()) AS IMAGE_ID,
             
             -- Temporal data
-            DATEADD(SECOND, -UNIFORM(1, 31536000, RANDOM()), CURRENT_TIMESTAMP()) AS CAPTURE_TIMESTAMP,
-            DATEADD(HOUR, UNIFORM(1, 168, RANDOM()), CAPTURE_TIMESTAMP) AS UPLOAD_TIMESTAMP,
-            DATE(CAPTURE_TIMESTAMP) AS CAPTURE_DATE,
+            BASE_CAPTURE_TIME AS CAPTURE_TIMESTAMP,
+            DATEADD(HOUR, UNIFORM(1, 168, RANDOM()), BASE_CAPTURE_TIME)::TIMESTAMP_NTZ AS UPLOAD_TIMESTAMP,
+            DATE(BASE_CAPTURE_TIME) AS CAPTURE_DATE,
             
             -- Global coordinates (realistic distribution)
             CASE 
                 WHEN UNIFORM(1, 10, RANDOM()) <= 3 THEN
                     -- 30% concentrated in populated areas
-                    ROUND(UNIFORM(25.0, 49.0, RANDOM()) + NORMAL(0, 5, RANDOM()), 6)
+                    ROUND(UNIFORM(25.0, 49.0, RANDOM()) + NORMAL(0, 5, RANDOM()), 6)::NUMBER(10,6)
                 WHEN UNIFORM(1, 10, RANDOM()) <= 6 THEN
                     -- 30% in Europe/Asia populated zones
-                    ROUND(UNIFORM(35.0, 65.0, RANDOM()) + NORMAL(0, 8, RANDOM()), 6)
+                    ROUND(UNIFORM(35.0, 65.0, RANDOM()) + NORMAL(0, 8, RANDOM()), 6)::NUMBER(10,6)
                 ELSE
                     -- 40% globally distributed
-                    ROUND(UNIFORM(-85.0, 85.0, RANDOM()), 6)
+                    ROUND(UNIFORM(-85.0, 85.0, RANDOM()), 6)::NUMBER(10,6)
             END AS LATITUDE,
             
             CASE 
                 WHEN UNIFORM(1, 10, RANDOM()) <= 3 THEN
                     -- 30% concentrated in Americas
-                    ROUND(UNIFORM(-125.0, -65.0, RANDOM()) + NORMAL(0, 10, RANDOM()), 6)
+                    ROUND(UNIFORM(-125.0, -65.0, RANDOM()) + NORMAL(0, 10, RANDOM()), 6)::NUMBER(10,6)
                 WHEN UNIFORM(1, 10, RANDOM()) <= 6 THEN
                     -- 30% in Europe/Asia/Africa
-                    ROUND(UNIFORM(-10.0, 140.0, RANDOM()) + NORMAL(0, 15, RANDOM()), 6)
+                    ROUND(UNIFORM(-10.0, 140.0, RANDOM()) + NORMAL(0, 15, RANDOM()), 6)::NUMBER(10,6)
                 ELSE
                     -- 40% globally distributed
-                    ROUND(UNIFORM(-180.0, 180.0, RANDOM()), 6)
+                    ROUND(UNIFORM(-180.0, 180.0, RANDOM()), 6)::NUMBER(10,6)
             END AS LONGITUDE,
             
             -- Sensor and technical specifications
@@ -162,12 +168,12 @@ $$
             
             -- Resolution based on sensor type (realistic ranges)
             CASE 
-                WHEN SENSOR_TYPE LIKE '%WorldView%' THEN ROUND(UNIFORM(0.3, 0.6, RANDOM()), 2)
-                WHEN SENSOR_TYPE LIKE '%GeoEye%' THEN ROUND(UNIFORM(0.4, 0.8, RANDOM()), 2)
-                WHEN SENSOR_TYPE LIKE '%Planet%' THEN ROUND(UNIFORM(3.0, 4.0, RANDOM()), 2)
-                WHEN SENSOR_TYPE LIKE '%Landsat%' THEN ROUND(UNIFORM(15.0, 30.0, RANDOM()), 2)
-                WHEN SENSOR_TYPE LIKE '%Sentinel%' THEN ROUND(UNIFORM(10.0, 20.0, RANDOM()), 2)
-                ELSE ROUND(UNIFORM(1.0, 10.0, RANDOM()), 2)
+                WHEN SENSOR_TYPE LIKE '%WorldView%' THEN ROUND(UNIFORM(0.3, 0.6, RANDOM()), 2)::NUMBER(8,2)
+                WHEN SENSOR_TYPE LIKE '%GeoEye%' THEN ROUND(UNIFORM(0.4, 0.8, RANDOM()), 2)::NUMBER(8,2)
+                WHEN SENSOR_TYPE LIKE '%Planet%' THEN ROUND(UNIFORM(3.0, 4.0, RANDOM()), 2)::NUMBER(8,2)
+                WHEN SENSOR_TYPE LIKE '%Landsat%' THEN ROUND(UNIFORM(15.0, 30.0, RANDOM()), 2)::NUMBER(8,2)
+                WHEN SENSOR_TYPE LIKE '%Sentinel%' THEN ROUND(UNIFORM(10.0, 20.0, RANDOM()), 2)::NUMBER(8,2)
+                ELSE ROUND(UNIFORM(1.0, 10.0, RANDOM()), 2)::NUMBER(8,2)
             END AS RESOLUTION_METERS,
             
             -- File characteristics
@@ -175,15 +181,15 @@ $$
             
             -- File paths and storage
             'https://satellite-data-' || RANDSTR(6, RANDOM()) || '.amazonaws.com/imagery/' || 
-            YEAR(CAPTURE_TIMESTAMP) || '/' || LPAD(MONTH(CAPTURE_TIMESTAMP), 2, '0') || '/' ||
+            YEAR(BASE_CAPTURE_TIME) || '/' || LPAD(MONTH(BASE_CAPTURE_TIME), 2, '0') || '/' ||
             'IMG_' || LPAD(RN, 12, '0') || '_' || RANDSTR(8, RANDOM()) || '.tiff' AS FILE_URL,
             
             UPPER(MD5(CONCAT('IMG_', RN, RANDSTR(16, RANDOM())))) AS FILE_HASH,
             
             'satellite-imagery-bucket-' || RANDSTR(4, RANDOM()) AS S3_BUCKET,
             
-            'satellite_data/' || YEAR(CAPTURE_TIMESTAMP) || '/' || 
-            LPAD(MONTH(CAPTURE_TIMESTAMP), 2, '0') || '/' ||
+            'satellite_data/' || YEAR(BASE_CAPTURE_TIME) || '/' || 
+            LPAD(MONTH(BASE_CAPTURE_TIME), 2, '0') || '/' ||
             'IMG_' || LPAD(RN, 12, '0') || '_' || RANDSTR(8, RANDOM()) || '.tiff' AS S3_KEY,
             
             -- Image characteristics
@@ -203,12 +209,12 @@ $$
             END AS IMAGE_FORMAT,
             
             -- Quality metrics
-            ROUND(UNIFORM(65.0, 98.5, RANDOM()), 2) AS DATA_QUALITY_SCORE,
-            ROUND(UNIFORM(0.0, 85.0, RANDOM()), 2) AS CLOUD_COVERAGE_PERCENT,
+            ROUND(UNIFORM(65.0, 98.5, RANDOM()), 2)::NUMBER(5,2) AS DATA_QUALITY_SCORE,
+            ROUND(UNIFORM(0.0, 85.0, RANDOM()), 2)::NUMBER(5,2) AS CLOUD_COVERAGE_PERCENT,
             
             -- Processing metadata
-            'BATCH_' || YEAR(CAPTURE_TIMESTAMP) || '_' || 
-            LPAD(DAYOFYEAR(CAPTURE_TIMESTAMP), 3, '0') || '_' || 
+            'BATCH_' || YEAR(BASE_CAPTURE_TIME) || '_' || 
+            LPAD(DAYOFYEAR(BASE_CAPTURE_TIME), 3, '0') || '_' || 
             LPAD(UNIFORM(1, 9999, RANDOM()), 4, '0') AS BATCH_ID,
             
             (SELECT status FROM REF_PROCESSING_STATUS ORDER BY RANDOM() LIMIT 1) AS PROCESSING_STATUS,
@@ -221,13 +227,32 @@ $$
             END AS UPLOAD_METHOD,
             
             -- Random city distance (0-500km from nearest major city)
-            ROUND(UNIFORM(0, 500000, RANDOM()), 2) AS DISTANCE_TO_NEAREST_CITY_M
+            ROUND(UNIFORM(0, 500000, RANDOM()), 2)::NUMBER(12,2) AS DISTANCE_TO_NEAREST_CITY_M
             
-        FROM SEQUENCE_CTE
+        FROM BASE_TIMESTAMPS
     ),
     ENHANCED_SATELLITE_DATA AS (
         SELECT 
-            *,
+            IMAGE_ID,
+            CAPTURE_TIMESTAMP,
+            UPLOAD_TIMESTAMP,
+            CAPTURE_DATE,
+            LATITUDE,
+            LONGITUDE,
+            SENSOR_TYPE,
+            RESOLUTION_METERS,
+            FILE_SIZE_BYTES,
+            FILE_URL,
+            FILE_HASH,
+            S3_BUCKET,
+            S3_KEY,
+            BANDS_AVAILABLE,
+            IMAGE_FORMAT,
+            DATA_QUALITY_SCORE,
+            CLOUD_COVERAGE_PERCENT,
+            BATCH_ID,
+            PROCESSING_STATUS,
+            UPLOAD_METHOD,
             -- Geometry representation
             CONCAT('POINT(', LONGITUDE, ' ', LATITUDE, ')') AS GEOMETRY_WKT,
             
@@ -237,6 +262,8 @@ $$
             H3_LATLNG_TO_CELL_STRING(LATITUDE, LONGITUDE, 8) AS H3_RES8_CITY,
             H3_LATLNG_TO_CELL_STRING(LATITUDE, LONGITUDE, 9) AS H3_RES9_NEIGHBORHOOD,
             H3_LATLNG_TO_CELL_STRING(LATITUDE, LONGITUDE, 10) AS H3_RES10_BLOCK,
+            
+            DISTANCE_TO_NEAREST_CITY_M,
             
             -- Enhanced sensor categorization
             CASE
@@ -272,10 +299,10 @@ $$
             END AS RESOLUTION_CATEGORY,
             
             -- Coverage calculation
-            ROUND((RESOLUTION_METERS * RESOLUTION_METERS) / 10000, 4) AS ESTIMATED_COVERAGE_HECTARES,
+            ROUND((RESOLUTION_METERS * RESOLUTION_METERS) / 10000, 4)::NUMBER(12,4) AS ESTIMATED_COVERAGE_HECTARES,
             
             -- Combined quality score
-            ROUND(DATA_QUALITY_SCORE * 0.9 + (100 - COALESCE(CLOUD_COVERAGE_PERCENT, 0)) * 0.1, 2) AS COMBINED_QUALITY_SCORE
+            ROUND(DATA_QUALITY_SCORE * 0.9 + (100 - COALESCE(CLOUD_COVERAGE_PERCENT, 0)) * 0.1, 2)::NUMBER(5,2) AS COMBINED_QUALITY_SCORE
             
         FROM SATELLITE_DATA
     )
@@ -288,36 +315,36 @@ $$;
 
 -- Create the target iceberg table
 CREATE OR REPLACE ICEBERG TABLE MAMMOTH.PUBLIC.SILVER_IMAGERY_METADATA_SCALE_ICEBERG (
-    IMAGE_ID VARCHAR(50),
+    IMAGE_ID STRING,
     CAPTURE_TIMESTAMP TIMESTAMP,
     UPLOAD_TIMESTAMP TIMESTAMP,
     CAPTURE_DATE DATE,
     LATITUDE NUMBER(10,6),
     LONGITUDE NUMBER(10,6),
-    SENSOR_TYPE VARCHAR(50),
+    SENSOR_TYPE STRING,
     RESOLUTION_METERS NUMBER(8,2),
     FILE_SIZE_BYTES NUMBER(15,0),
-    FILE_URL VARCHAR(500),
-    FILE_HASH VARCHAR(64),
-    S3_BUCKET VARCHAR(100),
-    S3_KEY VARCHAR(500),
+    FILE_URL STRING,
+    FILE_HASH STRING,
+    S3_BUCKET STRING,
+    S3_KEY STRING,
     BANDS_AVAILABLE NUMBER(3,0),
-    IMAGE_FORMAT VARCHAR(10),
+    IMAGE_FORMAT STRING,
     DATA_QUALITY_SCORE NUMBER(5,2),
     CLOUD_COVERAGE_PERCENT NUMBER(5,2),
-    BATCH_ID VARCHAR(50),
-    PROCESSING_STATUS VARCHAR(20),
-    UPLOAD_METHOD VARCHAR(20),
-    GEOMETRY_WKT VARCHAR(100),
-    H3_RES6_COUNTRY VARCHAR(20),
-    H3_RES7_METRO VARCHAR(20),
-    H3_RES8_CITY VARCHAR(20),
-    H3_RES9_NEIGHBORHOOD VARCHAR(20),
-    H3_RES10_BLOCK VARCHAR(20),
+    BATCH_ID STRING,
+    PROCESSING_STATUS STRING,
+    UPLOAD_METHOD STRING,
+    GEOMETRY_WKT STRING,
+    H3_RES6_COUNTRY STRING,
+    H3_RES7_METRO STRING,
+    H3_RES8_CITY STRING,
+    H3_RES9_NEIGHBORHOOD STRING,
+    H3_RES10_BLOCK STRING,
     DISTANCE_TO_NEAREST_CITY_M NUMBER(12,2),
-    SENSOR_CATEGORY VARCHAR(50),
-    REGION VARCHAR(50),
-    RESOLUTION_CATEGORY VARCHAR(50),
+    SENSOR_CATEGORY STRING,
+    REGION STRING,
+    RESOLUTION_CATEGORY STRING,
     ESTIMATED_COVERAGE_HECTARES NUMBER(12,4),
     COMBINED_QUALITY_SCORE NUMBER(5,2)
 )
