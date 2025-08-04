@@ -842,8 +842,12 @@ elif page == "🗺️ Geospatial Analysis":
         st.info("No data available for H3 spatial analysis. Please adjust your filters.")
 
 elif page == "⚓ Maritime Intelligence":
+    # Hide the main header and replace with Maritime Intelligence header
     st.markdown("""
-    <div class="nga-main-header">
+    <style>
+        .nga-main-header { display: none !important; }
+    </style>
+    <div style="background: linear-gradient(135deg, var(--nga-navy) 0%, var(--nga-blue) 50%, var(--nga-light-blue) 100%); margin: -5rem -1rem 2rem -1rem; padding: 0;">
         <div style="text-align: center; padding: 2.5rem;">
             <div style="background: rgba(255,255,255,0.95); color: var(--nga-navy); padding: 1rem 2rem; border-radius: 0.5rem; margin-bottom: 1.5rem; font-weight: 700; font-size: 1.1rem; letter-spacing: 3px; border: 3px solid var(--nga-gold); display: inline-block; box-shadow: 0 6px 20px rgba(0,0,0,0.3);">
                 NATIONAL GEOSPATIAL-INTELLIGENCE AGENCY
