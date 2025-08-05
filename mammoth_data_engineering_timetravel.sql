@@ -228,3 +228,4 @@ DROP TABLE SILVER_IMAGERY_CLONE;
 - No infrastructure management required
 =============================================================================
 */ 
+
