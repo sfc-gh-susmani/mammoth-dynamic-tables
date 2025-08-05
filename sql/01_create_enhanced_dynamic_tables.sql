@@ -8,6 +8,8 @@
 USE DATABASE MAMMOTH;
 USE SCHEMA PUBLIC;
 USE WAREHOUSE DEMO_WH;
+--Comment 
+
 
 -- =====================================================================================
 -- BRONZE LAYER: Source Data (Already exists as imagery_metadata_iceberg)
