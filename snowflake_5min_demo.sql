@@ -117,7 +117,7 @@ geospatial_hotspots AS (
         COUNT(*) AS density_score,
         AVG(LATITUDE) AS center_lat,
         AVG(LONGITUDE) AS center_lon,
-        STRING_AGG(DISTINCT SENSOR_TYPE, ', ') AS sensor_mix,
+        LISTAGG(DISTINCT SENSOR_TYPE, ', ') AS sensor_mix,
         AVG(COMBINED_QUALITY_SCORE) AS hotspot_quality
     FROM SILVER_IMAGERY_METADATA_SCALE_ICEBERG
     GROUP BY H3_RES8_CITY
@@ -155,9 +155,9 @@ SELECT
     COUNT(DISTINCT H3_RES8_CITY) AS city_level_coverage,
     ROUND(COUNT(*) / COUNT(DISTINCT H3_RES8_CITY), 2) AS avg_images_per_city,
     
-    -- Quality vs Coverage correlation
-    ROUND(CORR(COMBINED_QUALITY_SCORE, 
-               LOG(COUNT(*) OVER (PARTITION BY H3_RES8_CITY))), 3) AS quality_density_correlation,
+    -- Quality metrics analysis
+    ROUND(AVG(COMBINED_QUALITY_SCORE), 3) AS avg_quality_score,
+    ROUND(STDDEV(COMBINED_QUALITY_SCORE), 3) AS quality_variation,
     
     -- Temporal patterns
     COUNT(DISTINCT DATE_TRUNC('MONTH', CAPTURE_DATE)) AS months_of_coverage,
@@ -200,7 +200,7 @@ SELECT
     COUNT(*) AS image_count,
     ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) AS market_share_pct,
     ROUND(AVG(FILE_SIZE_BYTES) / 1024/1024, 2) AS avg_size_mb,
-    STRING_AGG(DISTINCT REGION, ', ') AS global_coverage
+    LISTAGG(DISTINCT REGION, ', ') AS global_coverage
 FROM SILVER_IMAGERY_METADATA_SCALE_ICEBERG
 GROUP BY quality_tier
 ORDER BY image_count DESC;
