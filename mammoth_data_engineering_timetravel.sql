@@ -96,7 +96,8 @@ SELECT 'Data restored instantly using time travel!' AS time_travel_power;
 -- SECTION 4: COMPLEX ANALYTICS AT SCALE (2 minutes)
 -- ============================================================================
 -- Run sophisticated geospatial analytics on 1 billion records
-alter warehouse demo_wh set WAREHOUSE_SIZE = 'X-LARGE'; 
+select count(*) from silver_imagery_metadata_scale_iceberg;
+alter warehouse demo_wh set WAREHOUSE_SIZE = '2X-LARGE'; 
 -- 🚀 SNOWFLAKE DIFFERENTIATOR: Massive Scale Performance
 -- Complex multi-dimensional analysis across 1 billion records
 WITH regional_analytics AS (
@@ -125,7 +126,7 @@ geospatial_hotspots AS (
         COUNT(*) AS density_score,
         AVG(LATITUDE) AS center_lat,
         AVG(LONGITUDE) AS center_lon,
-        STRING_AGG(DISTINCT SENSOR_TYPE, ', ') AS sensor_mix,
+        LISTAGG(DISTINCT SENSOR_TYPE, ', ') AS sensor_mix,
         AVG(COMBINED_QUALITY_SCORE) AS hotspot_quality
     FROM SILVER_IMAGERY_METADATA_SCALE_ICEBERG
     GROUP BY H3_RES8_CITY
@@ -162,9 +163,9 @@ SELECT
     COUNT(DISTINCT H3_RES8_CITY) AS city_level_coverage,
     ROUND(COUNT(*) / COUNT(DISTINCT H3_RES8_CITY), 2) AS avg_images_per_city,
     
-    -- Quality vs Coverage correlation
-    ROUND(CORR(COMBINED_QUALITY_SCORE, 
-               LOG(COUNT(*) OVER (PARTITION BY H3_RES8_CITY))), 3) AS quality_density_correlation,
+    -- Quality metrics analysis
+    ROUND(AVG(COMBINED_QUALITY_SCORE), 3) AS avg_quality_score,
+    ROUND(STDDEV(COMBINED_QUALITY_SCORE), 3) AS quality_variation,
     
     -- Temporal patterns
     COUNT(DISTINCT DATE_TRUNC('MONTH', CAPTURE_DATE)) AS months_of_coverage,
@@ -175,6 +176,11 @@ SELECT
 FROM SILVER_IMAGERY_METADATA_SCALE_ICEBERG
 GROUP BY REGION
 ORDER BY country_level_coverage DESC;
+
+alter warehouse demo_wh set warehouse_size = 'x-small';
+
+--show caching by rerunning
+
 
 -- ============================================================================
 -- SECTION 6: PERFORMANCE & SCALE SUMMARY (30 seconds)
@@ -190,27 +196,6 @@ SELECT
     'Built-in geospatial functions' AS advanced_analytics,
     'Auto-scaling compute' AS elasticity;
 
--- ============================================================================
--- BONUS: REAL-TIME INSIGHTS GENERATION
--- ============================================================================
--- Quick insights that would traditionally take hours
-
--- Generate business intelligence in seconds from billion records
-SELECT 
-    'INSTANT BUSINESS INTELLIGENCE' AS insight_type,
-    CASE 
-        WHEN COMBINED_QUALITY_SCORE >= 90 THEN 'Premium Grade'
-        WHEN COMBINED_QUALITY_SCORE >= 80 THEN 'Commercial Grade' 
-        WHEN COMBINED_QUALITY_SCORE >= 70 THEN 'Standard Grade'
-        ELSE 'Processing Grade'
-    END AS quality_tier,
-    COUNT(*) AS image_count,
-    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) AS market_share_pct,
-    ROUND(AVG(FILE_SIZE_BYTES) / 1024/1024, 2) AS avg_size_mb,
-    STRING_AGG(DISTINCT REGION, ', ') AS global_coverage
-FROM SILVER_IMAGERY_METADATA_SCALE_ICEBERG
-GROUP BY quality_tier
-ORDER BY image_count DESC;
 
 -- ============================================================================
 -- CLEANUP (Optional - for demo reset)
