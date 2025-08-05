@@ -7,40 +7,38 @@
 
 USE DATABASE MAMMOTH;
 USE SCHEMA PUBLIC;
-USE WAREHOUSE COMPUTE_WH;
+USE WAREHOUSE DEMO_WH;
 
+ALTER WAREHOUSE DEMO_WH SET WAREHOUSE_SIZE = 'X-SMALL';
 -- ============================================================================
 -- SECTION 1: DATA SCALE OVERVIEW (30 seconds)
 -- ============================================================================
 -- Show the massive scale we're working with
 
 SELECT 
-    'BILLION RECORD TABLE OVERVIEW' AS demo_section,
+    'TABLE OVERVIEW' AS demo_section,
     COUNT(*) AS total_records,
-    COUNT(*) / 1000000000.0 AS billion_scale,
-    COUNT(DISTINCT REGION) AS global_regions,
     COUNT(DISTINCT SENSOR_TYPE) AS sensor_types,
     MIN(CAPTURE_DATE) AS earliest_capture,
     MAX(CAPTURE_DATE) AS latest_capture,
     ROUND(SUM(FILE_SIZE_BYTES) / 1024/1024/1024/1024, 2) AS total_data_tb
-FROM SILVER_IMAGERY_METADATA_SCALE_ICEBERG;
+FROM SILVER_IMAGERY_METADATA_ICEBERG;
 
 -- ============================================================================
 -- SECTION 2: ZERO COPY CLONING (1 minute)
 -- ============================================================================
 -- Demonstrate instant cloning of billion-record table with NO data movement
-
 -- 🚀 SNOWFLAKE DIFFERENTIATOR: Zero Copy Cloning
 -- Create instant clone of 1 billion records (seconds, not hours!)
-CREATE OR REPLACE TABLE SILVER_IMAGERY_CLONE 
-CLONE SILVER_IMAGERY_METADATA_SCALE_ICEBERG;
+CREATE OR REPLACE ICEBERG TABLE SILVER_IMAGERY_CLONE 
+CLONE SILVER_IMAGERY_METADATA_ICEBERG_v2;
 
 -- Verify clone is identical but independent
 SELECT 
     'ZERO COPY CLONE VERIFICATION' AS demo_section,
     'Original Table' AS table_type,
     COUNT(*) AS record_count
-FROM SILVER_IMAGERY_METADATA_SCALE_ICEBERG
+FROM SILVER_IMAGERY_METADATA_ICEBERG
 UNION ALL
 SELECT 
     'ZERO COPY CLONE VERIFICATION' AS demo_section,
@@ -48,11 +46,6 @@ SELECT
     COUNT(*) AS record_count
 FROM SILVER_IMAGERY_CLONE;
 
--- Show storage efficiency - clones use virtually no additional storage initially
-SELECT 
-    'STORAGE EFFICIENCY' AS demo_section,
-    'Both tables share same underlying data' AS benefit,
-    'Instant clone creation, no data duplication' AS value_prop;
 
 -- ============================================================================
 -- SECTION 3: TIME TRAVEL (1 minute)
@@ -61,26 +54,41 @@ SELECT
 
 -- 🚀 SNOWFLAKE DIFFERENTIATOR: Time Travel
 -- Make a change to demonstrate time travel
-DELETE FROM SILVER_IMAGERY_CLONE WHERE REGION = 'Antarctica';
+select * from silver_imagery_clone;
+DELETE FROM SILVER_IMAGERY_CLONE WHERE BAY_REGION = 'North Bay';
 
 -- Show current state vs historical state
 SELECT 
     'TIME TRAVEL DEMO' AS demo_section,
     'Current State' AS data_state,
     COUNT(*) AS record_count,
-    COUNT(DISTINCT REGION) AS regions_count
 FROM SILVER_IMAGERY_CLONE
 UNION ALL
 SELECT 
     'TIME TRAVEL DEMO' AS demo_section,
     'Historical State (5 min ago)' AS data_state,
     COUNT(*) AS record_count,
-    COUNT(DISTINCT REGION) AS regions_count
-FROM SILVER_IMAGERY_CLONE AT(OFFSET => -300); -- 5 minutes ago
+FROM SILVER_IMAGERY_CLONE AT(OFFSET => -60); -- 1 minute ago
+
+
+SET query_id = (
+  SELECT query_id
+  FROM TABLE(information_schema.query_history_by_session(result_limit=>5))
+  WHERE query_text LIKE 'DELETE%'
+  ORDER BY start_time DESC
+  LIMIT 1
+);
+
+select $query_id;
 
 -- Instantly restore deleted data using time travel
-CREATE OR REPLACE TABLE SILVER_IMAGERY_CLONE 
-CLONE SILVER_IMAGERY_METADATA_SCALE_ICEBERG AT(OFFSET => -300);
+CREATE OR REPLACE ICEBERG TABLE SILVER_IMAGERY_CLONE 
+external_volume = 'MAMMOTH_ICEBERG_EXTERNAL_VOLUME'  catalog = 'SNOWFLAKE'  base_location = 'mammoth_dodicse/silver_imagery_metadata_enhanced/' 
+AS
+SELECT * FROM SILVER_IMAGERY_CLONE BEFORE (STATEMENT => $query_id)
+;
+
+select count(*) from silver_imagery_clone;
 
 SELECT 'Data restored instantly using time travel!' AS time_travel_power;
 
@@ -88,7 +96,7 @@ SELECT 'Data restored instantly using time travel!' AS time_travel_power;
 -- SECTION 4: COMPLEX ANALYTICS AT SCALE (2 minutes)
 -- ============================================================================
 -- Run sophisticated geospatial analytics on 1 billion records
-
+alter warehouse demo_wh set WAREHOUSE_SIZE = 'X-LARGE'; 
 -- 🚀 SNOWFLAKE DIFFERENTIATOR: Massive Scale Performance
 -- Complex multi-dimensional analysis across 1 billion records
 WITH regional_analytics AS (
@@ -137,8 +145,7 @@ LEFT JOIN geospatial_hotspots gh ON qr.avg_quality > gh.hotspot_quality
 WHERE qr.quality_rank <= 3  -- Top 3 quality regions per category
 GROUP BY qr.REGION, qr.SENSOR_CATEGORY, qr.image_count, qr.avg_quality, 
          qr.total_storage_bytes, qr.quality_rank
-ORDER BY qr.image_count DESC
-LIMIT 15;
+ORDER BY qr.image_count DESC;
 
 -- ============================================================================
 -- SECTION 5: ADVANCED GEOSPATIAL INTELLIGENCE (1 minute)
@@ -208,7 +215,7 @@ ORDER BY image_count DESC;
 -- ============================================================================
 -- CLEANUP (Optional - for demo reset)
 -- ============================================================================
--- DROP TABLE SILVER_IMAGERY_CLONE;
+DROP TABLE SILVER_IMAGERY_CLONE;
 
 /*
 =============================================================================
