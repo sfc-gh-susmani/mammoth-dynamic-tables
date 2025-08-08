@@ -12,23 +12,27 @@ env:
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment: production
     steps:
     # Checks out your repository under $GITHUB_WORKSPACE, so your workflow can access it
     - name: 'Checkout GitHub Action'
       uses: actions/checkout@v3
 
-    - name: Install Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: 'Install Snowflake CLI'
+    - name: 'Verify Python and Snowflake CLI'
       shell: bash
       run: |
-        python -m pip install --upgrade pip
-        pip install snowflake-cli
+        echo "🐍 Python version:"
+        python3 --version
+        echo "❄️ Snowflake CLI status:"
+        if command -v snow &> /dev/null; then
+          snow --version
+          echo "✅ Snowflake CLI is already installed"
+        else
+          echo "📦 Installing Snowflake CLI..."
+          python3 -m pip install --upgrade pip
+          pip3 install snowflake-cli
+        fi
 
     - name: 'Create config'
       shell: bash
