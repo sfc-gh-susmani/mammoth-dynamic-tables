@@ -1,12 +1,12 @@
 [connections.default]
-# Snowflake account configuration for DODICSE
+# Snowflake account configuration for CI/CD
 account = "SFSENORTHAMERICA-DODICSE"
-user = "sfacchine"
+user = "github_actions_user"
 password = "PLACEHOLDER_PASSWORD"
 database = "MAMMOTH"
 schema = "PUBLIC"
 warehouse = "DEMO_WH"
-role = "ACCOUNTADMIN"
+role = "STREAMLIT_CICD_ROLE"
 
 [streamlit]
 # Streamlit app configuration
