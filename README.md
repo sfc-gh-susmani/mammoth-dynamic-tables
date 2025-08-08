@@ -265,3 +265,4 @@ This project is part of the MAMMOTH geospatial analytics demonstration platform.
 ---
 
 **🚀 Ready to deploy? Run the scripts and unlock comprehensive geospatial intelligence for your satellite imagery data!** # Trigger deployment Fri Aug  8 09:52:02 EDT 2025
+# Test self-hosted runner deployment Fri Aug  8 10:01:41 EDT 2025
