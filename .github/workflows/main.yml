@@ -34,12 +34,17 @@ jobs:
           pip3 install snowflake-cli
         fi
 
-    - name: 'Setup Snowflake Connection'
+    - name: 'Setup Snowflake Connection with Private Key'
       shell: bash
       env:
-        SNOWFLAKE_PASSWORD: ${{ secrets.SNOWCLI_PW }}
+        SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
       run: |
-        # Create temporary connection for deployment
+        # Create .ssh directory and private key file
+        mkdir -p ~/.ssh/snowflake
+        echo "$SNOWFLAKE_PRIVATE_KEY" > ~/.ssh/snowflake/snowflake_rsa_key.pem
+        chmod 600 ~/.ssh/snowflake/snowflake_rsa_key.pem
+        
+        # Create temporary connection for deployment using private key
         snow connection add --connection-name temp-deploy \
           --account SFSENORTHAMERICA-DODICSE \
           --user sfacchine \
@@ -47,7 +52,8 @@ jobs:
           --schema PUBLIC \
           --warehouse DEMO_WH \
           --role ACCOUNTADMIN \
-          --password "$SNOWFLAKE_PASSWORD"
+          --private-key-path ~/.ssh/snowflake/snowflake_rsa_key.pem \
+          --authenticator SNOWFLAKE_JWT
 
     - name: 'Deploy the Streamlit app'
       shell: bash
