@@ -34,26 +34,30 @@ jobs:
           pip3 install snowflake-cli
         fi
 
-    - name: 'Create config'
+    - name: 'Setup Snowflake Connection'
       shell: bash
       env:
         SNOWFLAKE_PASSWORD: ${{ secrets.SNOWCLI_PW }}
       run: |
-        mkdir -p ~/.snowflake
-        cp config.toml ~/.snowflake/config.toml
-        # Replace password using Python (safest for special characters)
-        python3 -c "import os; content=open(os.path.expanduser('~/.snowflake/config.toml')).read(); open(os.path.expanduser('~/.snowflake/config.toml'), 'w').write(content.replace('PLACEHOLDER_PASSWORD', os.environ['SNOWFLAKE_PASSWORD']))"
-        chmod 0600 ~/.snowflake/config.toml
+        # Create temporary connection for deployment
+        snow connection add --connection-name temp-deploy \
+          --account SFSENORTHAMERICA-DODICSE \
+          --user sfacchine \
+          --database MAMMOTH \
+          --schema PUBLIC \
+          --warehouse DEMO_WH \
+          --role ACCOUNTADMIN \
+          --password "$SNOWFLAKE_PASSWORD"
 
     - name: 'Deploy the Streamlit app'
       shell: bash
       run: |
-        snow streamlit deploy --replace
+        snow streamlit deploy --replace --connection temp-deploy
 
     - name: 'Get Streamlit app URL'
       shell: bash
       run: |
-        snow streamlit get-url nga_imagery_intelligence_app
+        snow streamlit get-url nga_imagery_intelligence_app --connection temp-deploy
 
     - name: 'Deployment Success Notification'
       shell: bash
