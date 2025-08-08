@@ -96,7 +96,8 @@ SELECT 'Data restored instantly using time travel!' AS time_travel_power;
 -- SECTION 4: COMPLEX ANALYTICS AT SCALE (2 minutes)
 -- ============================================================================
 -- Run sophisticated geospatial analytics on 1 billion records
-alter warehouse demo_wh set WAREHOUSE_SIZE = 'X-LARGE'; 
+select count(*) from silver_imagery_metadata_scale_iceberg;
+alter warehouse demo_wh set WAREHOUSE_SIZE = '2X-LARGE'; 
 -- 🚀 SNOWFLAKE DIFFERENTIATOR: Massive Scale Performance
 -- Complex multi-dimensional analysis across 1 billion records
 WITH regional_analytics AS (
@@ -176,6 +177,11 @@ FROM SILVER_IMAGERY_METADATA_SCALE_ICEBERG
 GROUP BY REGION
 ORDER BY country_level_coverage DESC;
 
+alter warehouse demo_wh set warehouse_size = 'x-small';
+
+--show caching by rerunning
+
+
 -- ============================================================================
 -- SECTION 6: PERFORMANCE & SCALE SUMMARY (30 seconds)
 -- ============================================================================
@@ -190,6 +196,7 @@ SELECT
     'Built-in geospatial functions' AS advanced_analytics,
     'Auto-scaling compute' AS elasticity;
 
+<<<<<<< HEAD:snowflake_5min_demo.sql
 -- ============================================================================
 -- BONUS: REAL-TIME INSIGHTS GENERATION
 -- ============================================================================
@@ -211,6 +218,8 @@ SELECT
 FROM SILVER_IMAGERY_METADATA_SCALE_ICEBERG
 GROUP BY quality_tier
 ORDER BY image_count DESC;
+=======
+>>>>>>> 5e37399a07fbd8d8b024ae6ef4caea4ee15352ea:mammoth_data_engineering_timetravel.sql
 
 -- ============================================================================
 -- CLEANUP (Optional - for demo reset)
@@ -243,3 +252,4 @@ DROP TABLE SILVER_IMAGERY_CLONE;
 - No infrastructure management required
 =============================================================================
 */ 
+
