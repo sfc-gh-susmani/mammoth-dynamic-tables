@@ -42,19 +42,16 @@ jobs:
         mkdir -p ~/.snowflake
         cp config.toml ~/.snowflake/config.toml
         # Replace password using Python (safest for special characters)
-        python3 << EOF
+        python3 -c "
 import os
 config_path = os.path.expanduser('~/.snowflake/config.toml')
 password = os.environ['SNOWFLAKE_PASSWORD']
-
 with open(config_path, 'r') as f:
     content = f.read()
-
 content = content.replace('PLACEHOLDER_PASSWORD', password)
-
 with open(config_path, 'w') as f:
     f.write(content)
-EOF
+"
         chmod 0600 ~/.snowflake/config.toml
 
     - name: 'Deploy the Streamlit app'
