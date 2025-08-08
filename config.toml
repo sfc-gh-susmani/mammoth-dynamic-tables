@@ -2,7 +2,7 @@
 # Snowflake account configuration for DODICSE
 account = "SFSENORTHAMERICA-DODICSE"
 user = "sfacchine"
-# Password will be injected from GitHub Secrets
+password = "PLACEHOLDER_PASSWORD"
 database = "MAMMOTH"
 schema = "PUBLIC"
 warehouse = "DEMO_WH"

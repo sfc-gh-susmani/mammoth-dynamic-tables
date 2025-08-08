@@ -28,7 +28,7 @@ jobs:
       shell: bash
       run: |
         python -m pip install --upgrade pip
-        pip install snowflake-cli-labs
+        pip install snowflake-cli
 
     - name: 'Create config'
       shell: bash
@@ -37,7 +37,8 @@ jobs:
       run: |
         mkdir -p ~/.snowflake
         cp config.toml ~/.snowflake/config.toml
-        echo "password = \"$SNOWFLAKE_PASSWORD\"" >> ~/.snowflake/config.toml
+        # Replace placeholder with actual password
+        sed -i "s/PLACEHOLDER_PASSWORD/$SNOWFLAKE_PASSWORD/g" ~/.snowflake/config.toml
         chmod 0600 ~/.snowflake/config.toml
 
     - name: 'Deploy the Streamlit app'
